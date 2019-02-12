@@ -1,2 +1,2 @@
-flex_version>=1.0.1
+flex_version==1.2.0
 ruamel.yaml
