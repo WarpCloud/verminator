@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-from ruamel.yaml import YAML
-from flex_version import FlexVersion, VersionMeta, VersionDelta
-import logging
-from functools import cmp_to_key
 
-logger = logging.getLogger(__name__)
+from .utils import *
+
+__all__ = ['Instance']
 
 # Customized version suffix ordering
 FlexVersion.ordered_suffix = ['rc', 'final', None]
@@ -25,8 +23,8 @@ class Instance(object):
             kwargs.get('max-tdc-version', None))
 
         if FlexVersion.compares(self._min_tdc_version, self._max_tdc_version) > 0:
-            logger.error('Invalid min-max tdc version range for %s %s' %
-                         (self.instance_type, self.major_version))
+            raise ValueError('Invalid min-max tdc version range for %s %s' %
+                             (self.instance_type, self.major_version))
 
         self._hot_fix_ranges = list()
         for item in kwargs.get('hot-fix-ranges', list):
@@ -41,6 +39,14 @@ class Instance(object):
             self.add_release(release)
 
     @property
+    def min_tdc_version(self):
+        return self._min_tdc_version
+
+    @property
+    def max_tdc_version(self):
+        return self._max_tdc_version
+
+    @property
     def hot_fix_ranges(self):
         return self._hot_fix_ranges
 
@@ -51,7 +57,7 @@ class Instance(object):
             _max = FlexVersion.parse_version(_max)
 
         if FlexVersion.compares(_min, _max) > 0:
-            logging.error(
+            raise ValueError(
                 'Invalid hot fix range for %s %s' %
                 (self.instance_type, self.major_version)
             )
@@ -69,11 +75,10 @@ class Instance(object):
         if variable not in self._images:
             self._images[variable] = name
         else:
-            logger.warning(
+            raise ValueError(
                 'Duplicated image variables definitions for %s %s' % (
                     self.instance_type, self.major_version
-                )
-            )
+                ))
 
     @property
     def releases(self):
@@ -103,8 +108,7 @@ class Instance(object):
         self._releases[r.release_version] = r
 
     def get_release(self, release_version, default=None):
-        if not isinstance(release_version, VersionMeta):
-            release_version = FlexVersion.parse_version(release_version)
+        release_version = parse_version(release_version)
         return self._releases.get(release_version, default)
 
     def ordered_releases(self, reverse=False):
@@ -117,10 +121,24 @@ class Instance(object):
 
     def validate_releases(self, release_meta):
         for r in self.ordered_releases():
-            if not r.is_final:
-                pass
-            
-            cv = release_meta.compatible_versions(r.release_version)
+            if r.is_final and not is_valid_final(r.release_version):
+                raise ValueError('The final version %s is illage' % r.release_version)
+
+            cv = get_compatible_versions(
+                release_meta,
+                r.release_version
+            )
+
+            # Filter vrange by tdc min-max version
+            for pname in cv:
+                other = (self.min_tdc_version, self.max_tdc_version)
+                filtered = list()
+                for vrange in cv[pname]:
+                    fv = filter_vrange(vrange, other)
+                    if fv is not None:
+                        filtered.append(fv)
+                cv[pname] = filtered
+
             print(r.release_version, cv)
 
 
@@ -147,159 +165,23 @@ class Release(object):
             _min_ver = FlexVersion.parse_version(dep.get('min-version'))
 
             if FlexVersion.compares(_min_ver, _max_ver) > 0:
-                logger.error('Invalid min-max version declaim for dependency of %s for %s %s'
-                             % (instance_type,
-                                self.instance_type,
-                                self.release_version)
-                             )
+                raise ValueError('Invalid min-max version declaim for dependency of %s for %s %s'
+                                 % (instance_type,
+                                    self.instance_type,
+                                    self.release_version)
+                                 )
 
             if instance_type in self.dependencies:
-                logger.error('Duplicated dependency of %s for %s %s' %
-                             (instance_type, self.instance_type,
-                              self.release_version))
+                raise ValueError('Duplicated dependency of %s for %s %s' %
+                                 (instance_type, self.instance_type,
+                                  self.release_version))
             else:
                 self.dependencies[instance_type] = (_min_ver, _max_ver)
 
-    def get_anchor_release_version(self):
+    def get_anchor_version(self):
         """Get the anchor release version, e.g.,
         the anchor version of transwarp-5.2.0-final is transwarp-5.2
         """
         return FlexVersion.parse_version(
-            '%s-%d.%d' % (self.prefix, self.major, self.minor)
+            '%s-%d.%d' % (self.release_version.prefix, self.release_version.major, self.release_version.minor)
         )
-
-
-def concatenate_version_ranges(vranges):
-    """ Connect and merge version ranges.
-    """
-    sorted_vranges = sorted(vranges, key=cmp_to_key(
-        lambda x, y: FlexVersion.compares(x[0], y[0])
-    ))
-
-    res = [sorted_vranges[0]]
-    for vrange in sorted_vranges[1:]:
-        pmin, pmax = res[-1]
-        cmin, cmax = vrange
-
-        # Ranges connected directly:
-        # * Overlapping ranges
-        # * adjacent suffix versions
-        if FlexVersion.in_range(cmin, pmin, pmax) \
-                or cmin == pmax.add(VersionDelta(sver=1)):
-            res[-1] = (pmin, cmax)
-            continue
-
-        # Ranges between rc and final
-        share_non_suffix = \
-            pmax.substitute(cmin, ignore_suffix=True) == VersionDelta.zero
-        if share_non_suffix and pmax.suffix == 'rc' and cmin.suffix == 'final':
-            res[-1] = (pmin, cmax)
-            continue
-
-        res.append(vrange)
-
-    return res
-
-
-class ProductReleaseMeta(object):
-    """ Processing `releases_meta.yaml`.
-    """
-
-    def __init__(self, yaml_file):
-        self.releases = dict()  # {release_name: product: (minv, maxv)}
-        yaml = YAML()
-        meta = yaml.load(open(yaml_file))
-        self._load_releases(meta)
-
-    def _load_releases(self, meta):
-        """ Read releases meta info of product lines
-        """
-        for r in meta.get('Releases', list()):
-            rname = FlexVersion.parse_version(r.get('release_name'))
-            assert rname not in self.releases, \
-                'Duplicated release meta %s' % rname
-
-            self.releases[rname] = dict()
-
-            products = r.get('products', list())
-            for p in products:
-                pname = p.get('product')
-                minv = FlexVersion.parse_version(p.get('min'))
-                maxv = FlexVersion.parse_version(p.get('max'))
-                assert pname not in self.releases[rname], \
-                    'Duplicated product %s in release %s' % (pname, rname)
-                self.releases[rname][pname] = (minv, maxv)
-
-    def product_name(self, version):
-        """Get the product name given a specific version
-        """
-        res = set()
-        if not isinstance(version, VersionMeta):
-            version = FlexVersion.parse_version(version)
-
-        for rname, products in self.releases.items():
-            for pname, vrange in products.items():
-                if version.in_range(vrange[0], vrange[1]):
-                    res.add(pname)
-
-        if len(res) > 1:
-            raise ValueError('Conflict product names [%s] for %s' % (','.join(res), version))
-        elif len(res) == 0:
-            return None
-        else:
-            return list(res)[0]
-
-    def compatible_versions(self, version, product=None):
-        """ Given a product line name and a specific version,
-        return the compatible product version ranges.
-        """
-        res = dict()  # {product: [(minv, maxv), (minv, maxv)]}
-
-        if product is None:
-            product = self.product_name(version)
-
-        if product == 'tdc':
-            sv = str(version)
-            if sv not in self.releases:
-                raise ValueError('Version %s not found' % sv)
-
-            products = self.releases[sv]
-            for pname, vrange in products.items():
-                res[pname] = [vrange]
-        else:
-            res['tdc'] = list()
-            filetered_products = list()
-            for rname, products in self.releases.items():
-                if product not in products:
-                    # Ignore release without target product
-                    continue
-                minv, maxv = products.get(product)
-                if not FlexVersion.in_range(version, minv, maxv):
-                    # Ignore release not containing target version
-                    continue
-                # Remember TDC versions
-                res['tdc'] = concatenate_version_ranges(
-                    res['tdc'] + [(rname, rname)])
-                # Extract other product versions
-                for pname, vrange in products.items():
-                    if pname == product:
-                        continue
-                    if pname not in res:
-                        res[pname] = list()
-                    res[pname] = concatenate_version_ranges(
-                        res[pname] + [vrange])
-        return res
-
-
-if __name__ == '__main__':
-    yaml = YAML()
-    dat = yaml.load(
-        open('/home/chenxm/Documents/Workspace/product-meta/instances/inceptor/5.2/images.yaml')
-    )
-    ins = Instance(**dat)
-
-    meta = ProductReleaseMeta(
-        '/home/chenxm/Documents/Workspace/product-meta/instances/releases_meta.yaml')
-    cv = meta.compatible_versions('sophon', 'sophonweb-2.0.0-final')
-    
-    ins.validate_releases(meta)
