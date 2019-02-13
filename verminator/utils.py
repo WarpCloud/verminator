@@ -49,7 +49,21 @@ def filter_vrange(this, other):
 
 
 def concatenate_vranges(vranges, hard_merging=False):
+    prefixes = dict()
+    for vrange in vranges:
+        prefix = vrange[0].prefix
+        if prefix not in prefixes:
+            prefixes[prefix] = list()
+        prefixes[prefix].append(vrange)
+
+    concatenated = [_concatenate_vranges_with_same_prefix(vranges, hard_merging) \
+        for vranges in prefixes.values()]
+    return [y for x in concatenated for y in x]
+
+
+def _concatenate_vranges_with_same_prefix(vranges, hard_merging=False):
     """ Connect and merge version ranges.
+    @return a list of concatenated version ranges.
     """
     sorted_vranges = sorted(vranges, key=cmp_to_key(
         lambda x, y: FlexVersion.compares(x[0], y[0])
@@ -64,15 +78,15 @@ def concatenate_vranges(vranges, hard_merging=False):
             # Ranges connected directly:
             # * Overlapping ranges
             # * adjacent suffix versions
-            if FlexVersion.in_range(cmin, pmin, pmax) \
-                    or cmin == pmax.add(VersionDelta(sver=1)):
+            if cmin.suffix is not None and pmin.suffix is not None and \
+                (FlexVersion.in_range(cmin, pmin, pmax) \
+                    or cmin == pmax.add(VersionDelta(sver=1))):
                 res[-1] = (pmin, cmax)
                 continue
 
             # Ranges between rc and final
-            share_non_suffix = \
-                pmax.substitute(cmin, ignore_suffix=True) == VersionDelta.zero
-            if share_non_suffix and pmax.suffix == 'rc' and cmin.suffix == 'final':
+            if pmax.substitute(cmin, ignore_suffix=True) == VersionDelta.zero \
+                and pmax.suffix == 'rc' and cmin.suffix == 'final':
                 res[-1] = (pmin, cmax)
                 continue
 

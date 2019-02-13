@@ -84,7 +84,7 @@ class ProductReleaseMeta(object):
 
         if product == 'tdc':
             if version not in releases:
-                raise ValueError('Version %s not found' % version)
+                raise ValueError('Version %s should be declared in releasemeta' % version)
 
             products = releases[version]
             for pname, vrange in products.items():
