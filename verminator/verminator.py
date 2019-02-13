@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-
+import logging
 from .utils import *
 
-__all__ = ['Instance']
+__all__ = ['Instance', 'Release']
 
-# Customized version suffix ordering
-FlexVersion.ordered_suffix = ['rc', 'final', None]
+
+logger = logging.getLogger(__name__)
 
 
 class Instance(object):
@@ -119,19 +119,28 @@ class Instance(object):
                 x.release_version, y.release_version)
         ), reverse=reverse)
 
+    def _is_valid_final(self, version):
+        version = parse_version(version)
+        return True if version.suffix is not None else False
+
     def validate_releases(self, release_meta):
         for r in self.ordered_releases():
-            if r.is_final and not is_valid_final(r.release_version):
+
+            minor_versioned_only = is_minor_versioned_only(r.release_version)
+
+            # Validate is_final flag and version format
+            if r.is_final and not self._is_valid_final(r.release_version):
                 raise ValueError('The final version %s is illage' % r.release_version)
 
-            cv = get_compatible_versions(
-                release_meta,
+            cv = release_meta.get_compatible_versions(
                 r.release_version
             )
 
             # Filter vrange by tdc min-max version
+            minv = parse_version(self.min_tdc_version, minor_versioned_only)
+            maxv = parse_version(self.max_tdc_version, minor_versioned_only)
             for pname in cv:
-                other = (self.min_tdc_version, self.max_tdc_version)
+                other = (minv, maxv)
                 filtered = list()
                 for vrange in cv[pname]:
                     fv = filter_vrange(vrange, other)
@@ -139,8 +148,20 @@ class Instance(object):
                         filtered.append(fv)
                 cv[pname] = filtered
 
-            print(r.release_version, cv)
+            # Validate the dependency versions
+            for instance_type, vrange in r.dependencies.items():
+                product = get_product_name(vrange[0])
+                minv, maxv = cv[product][0] if product in cv else vrange
 
+                if minv != vrange[0]:
+                    logger.warn('Imcompatitable min version {} (should be {}) for dependency {} of release {} version {}'\
+                        .format(vrange[0], minv, instance_type, r.instance_type, r.release_version))
+
+                if maxv != vrange[1]:
+                    logger.warn('Imcompatitable max version {} (should be {}) for dependency {} of release {} version {}'\
+                        .format(vrange[1], maxv, instance_type, r.instance_type, r.release_version))
+
+                r.dependencies[instance_type] = (minv, maxv)
 
 class Release(object):
     """ The metadata of a specific versioned release.
@@ -158,7 +179,7 @@ class Release(object):
             self.image_version[img] = FlexVersion.parse_version(ver)
 
         # Dependencies
-        self.dependencies = dict()
+        self.dependencies = dict()  # {instance_type: (minv, maxv)}
         for dep in val.get('dependencies', list):
             instance_type = dep.get('type')
             _max_ver = FlexVersion.parse_version(dep.get('max-version'))
@@ -168,8 +189,7 @@ class Release(object):
                 raise ValueError('Invalid min-max version declaim for dependency of %s for %s %s'
                                  % (instance_type,
                                     self.instance_type,
-                                    self.release_version)
-                                 )
+                                    self.release_version))
 
             if instance_type in self.dependencies:
                 raise ValueError('Duplicated dependency of %s for %s %s' %
@@ -177,11 +197,3 @@ class Release(object):
                                   self.release_version))
             else:
                 self.dependencies[instance_type] = (_min_ver, _max_ver)
-
-    def get_anchor_version(self):
-        """Get the anchor release version, e.g.,
-        the anchor version of transwarp-5.2.0-final is transwarp-5.2
-        """
-        return FlexVersion.parse_version(
-            '%s-%d.%d' % (self.release_version.prefix, self.release_version.major, self.release_version.minor)
-        )

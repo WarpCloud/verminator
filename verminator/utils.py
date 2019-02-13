@@ -2,16 +2,34 @@ from functools import cmp_to_key
 
 from flex_version import FlexVersion, VersionMeta, VersionDelta
 
+# Customized version suffix ordering
+FlexVersion.ordered_suffix = ['rc', 'final', None]
 
-def parse_version(version):
+
+def parse_version(version, minor_versioned_only=False):
     if not isinstance(version, VersionMeta):
-        return FlexVersion.parse_version(version)
+        version = FlexVersion.parse_version(version)
+
+    if minor_versioned_only:
+        version.maintenance = None
+        version.build = None
+        version.suffix = None
+        version.suffix_version = None
+
     return version
 
 
 def get_product_name(version):
     version = parse_version(version)
     return version.prefix
+
+
+def is_minor_versioned_only(version):
+    version = parse_version(version)
+    return version.maintenance is None \
+        and version.build is None \
+        and version.suffix is None \
+        and version.suffix_version is None
 
 
 def filter_vrange(this, other):
@@ -30,56 +48,7 @@ def filter_vrange(this, other):
         return (cmin, cmax)
 
 
-def is_valid_final(version):
-    version = parse_version(version)
-    return True if version.suffix is not None else False
-
-
-def get_compatible_versions(product_release_meta, version):
-    """ Given a product line name and a specific version,
-    return the compatible product version ranges.
-    """
-    res = dict()  # {product: [(minv, maxv), (minv, maxv)]}
-
-    version = parse_version(version)
-    product = get_product_name(version)
-
-    if product == 'tdc':
-        sv = str(version)
-        if sv not in product_release_meta.releases:
-            raise ValueError('Version %s not found' % sv)
-
-        products = product_release_meta.releases[sv]
-        for pname, vrange in products.items():
-            res[pname] = [vrange]
-    else:
-        res['tdc'] = list()
-        filetered_products = list()
-        for rname, products in product_release_meta.releases.items():
-            if product not in products:
-                # Ignore release without target product
-                continue
-            minv, maxv = products.get(product)
-            if not FlexVersion.in_range(version, minv, maxv):
-                # Ignore release not containing target version
-                continue
-            # Remember TDC versions
-            res['tdc'] = concatenate_version_ranges(
-                res['tdc'] + [(rname, rname)]
-            )
-            # Extract other product versions
-            for pname, vrange in products.items():
-                if pname == product:
-                    continue
-                if pname not in res:
-                    res[pname] = list()
-                res[pname] = concatenate_version_ranges(
-                    res[pname] + [vrange]
-                )
-    return res
-
-
-def concatenate_version_ranges(vranges):
+def concatenate_vranges(vranges, hard_merging=False):
     """ Connect and merge version ranges.
     """
     sorted_vranges = sorted(vranges, key=cmp_to_key(
@@ -91,27 +60,31 @@ def concatenate_version_ranges(vranges):
         pmin, pmax = res[-1]
         cmin, cmax = vrange
 
-        # Ranges connected directly:
-        # * Overlapping ranges
-        # * adjacent suffix versions
-        if FlexVersion.in_range(cmin, pmin, pmax) \
-                or cmin == pmax.add(VersionDelta(sver=1)):
-            res[-1] = (pmin, cmax)
-            continue
+        if not hard_merging:
+            # Ranges connected directly:
+            # * Overlapping ranges
+            # * adjacent suffix versions
+            if FlexVersion.in_range(cmin, pmin, pmax) \
+                    or cmin == pmax.add(VersionDelta(sver=1)):
+                res[-1] = (pmin, cmax)
+                continue
 
-        # Ranges between rc and final
-        share_non_suffix = \
-            pmax.substitute(cmin, ignore_suffix=True) == VersionDelta.zero
-        if share_non_suffix and pmax.suffix == 'rc' and cmin.suffix == 'final':
-            res[-1] = (pmin, cmax)
-            continue
+            # Ranges between rc and final
+            share_non_suffix = \
+                pmax.substitute(cmin, ignore_suffix=True) == VersionDelta.zero
+            if share_non_suffix and pmax.suffix == 'rc' and cmin.suffix == 'final':
+                res[-1] = (pmin, cmax)
+                continue
 
-        # Ranges between final and rc
-        delta = cmin.substitute(pmax, ignore_suffix=True)
-        if delta >= VersionDelta.zero and pmax.suffix == 'final':
-            res[-1] = (pmin, cmax)
-            continue
+            # Ranges between final and rc
+            delta = cmin.substitute(pmax, ignore_suffix=True)
+            if delta >= VersionDelta.zero and pmax.suffix == 'final':
+                res[-1] = (pmin, cmax)
+                continue
 
-        res.append(vrange)
+            # Strict concatenation policy
+            res.append(vrange)
+        else:
+            res[-1] = (pmin, cmax)
 
     return res
