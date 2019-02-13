@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
+import sys
 import logging
+from collections import OrderedDict
+import ruamel.yaml
+from ruamel.yaml.comments import CommentedMap
+
 from .utils import *
 
 __all__ = ['Instance', 'Release']
@@ -26,15 +31,15 @@ class Instance(object):
             raise ValueError('Invalid min-max tdc version range for %s %s' %
                              (self.instance_type, self.major_version))
 
-        self._hot_fix_ranges = list()
+        self._hot_fix_ranges = list()  # [(minv, maxv)]
         for item in kwargs.get('hot-fix-ranges', list):
             self.add_host_fix_range(item.get('min'), item.get('max'))
 
-        self._images = dict()
+        self._images = dict()  # {var: name}
         for item in kwargs.get('images', dict()):
             self.add_image(item)
 
-        self._releases = dict()
+        self._releases = dict()  # {release_ver: Release}
         for release in kwargs.get('releases', dict()):
             self.add_release(release)
 
@@ -62,7 +67,6 @@ class Instance(object):
                 (self.instance_type, self.major_version)
             )
 
-        # TODO: Should we merge overlapping fix ranges?
         self._hot_fix_ranges.append((_min, _max))
 
     @property
@@ -86,6 +90,15 @@ class Instance(object):
         """
         return self._releases.values()
 
+    @property
+    def ordered_releases(self):
+        """ Get a list of ordered releases by versions.
+        """
+        return sorted(self._releases.values(), key=cmp_to_key(
+            lambda x, y: FlexVersion.compares(
+                x.release_version, y.release_version)
+        ))
+
     def add_release(self, release_dat):
         r = Release(self.instance_type, release_dat)
 
@@ -96,41 +109,58 @@ class Instance(object):
                     image_name, self.instance_type)
 
         # Validate release that should fall into a specific hot fix range
-        found = False
-        for _min, _max in self._hot_fix_ranges:
-            if FlexVersion.in_range(r.release_version, _min, _max):
-                found = True
-                break
-        assert found is True, \
-            'Release version %s should be located in a specific hot-fix range' % (
-                r.release_version)
-
+        self._validate_version_in_hot_fix_range(r.release_version)
         self._releases[r.release_version] = r
 
     def get_release(self, release_version, default=None):
         release_version = parse_version(release_version)
         return self._releases.get(release_version, default)
 
-    def ordered_releases(self, reverse=False):
-        """ Get a list of ordered releases by versions.
-        """
-        return sorted(self._releases.values(), key=cmp_to_key(
-            lambda x, y: FlexVersion.compares(
-                x.release_version, y.release_version)
-        ), reverse=reverse)
+    def validate(self, release_meta):
+        self._validate_final_flag()
+        self._validate_hot_fix_ranges()
+        self._validate_releases(release_meta)
 
     def _is_valid_final(self, version):
         version = parse_version(version)
         return True if version.suffix is not None else False
 
-    def validate_releases(self, release_meta):
-        for r in self.ordered_releases():
-
-            minor_versioned_only = is_minor_versioned_only(r.release_version)
-
+    def _validate_final_flag(self):
+        for r in self._releases.values():
             # Validate is_final flag and version format
             if r.is_final and not self._is_valid_final(r.release_version):
                 raise ValueError('The final version %s is illage' % r.release_version)
+
+    def _validate_hot_fix_ranges(self):
+        # Differenciate complete and minor-versioned-only versions
+        complete_ranges = list()
+        minor_versioned = list()
+        for minv, maxv in self._hot_fix_ranges:
+            im_minv = is_minor_versioned_only(minv)
+            im_maxv = is_minor_versioned_only(maxv)
+            assert im_minv == im_maxv, 'Min and max should take the same form'
+            if im_minv:
+                minor_versioned.append((minv, maxv))
+            else:
+                complete_ranges.append((minv, maxv))
+        self._hot_fix_ranges = \
+            concatenate_vranges(complete_ranges) + concatenate_vranges(minor_versioned)
+
+    def _validate_version_in_hot_fix_range(self, version):
+        found = False
+        for _min, _max in self._hot_fix_ranges:
+            if FlexVersion.in_range(version, _min, _max):
+                found = True
+                break
+        assert found is True, \
+            'Release version %s should be located in a specific hot-fix range' % \
+            (version)
+
+
+    def _validate_releases(self, release_meta):
+        for r in self.ordered_releases:
+
+            minor_versioned_only = is_minor_versioned_only(r.release_version)
 
             cv = release_meta.get_compatible_versions(
                 r.release_version
@@ -154,14 +184,60 @@ class Instance(object):
                 minv, maxv = cv[product][0] if product in cv else vrange
 
                 if minv != vrange[0]:
-                    logger.warn('Imcompatitable min version {} (should be {}) for dependency {} of release {} version {}'\
+                    logger.warn('Incompatible min version {} (should be {}) for dependency "{}" of release "{}" version {}'\
                         .format(vrange[0], minv, instance_type, r.instance_type, r.release_version))
 
                 if maxv != vrange[1]:
-                    logger.warn('Imcompatitable max version {} (should be {}) for dependency {} of release {} version {}'\
+                    logger.warn('Incompatible max version {} (should be {}) for dependency "{}" of release "{}" version {}'\
                         .format(vrange[1], maxv, instance_type, r.instance_type, r.release_version))
 
                 r.dependencies[instance_type] = (minv, maxv)
+
+    def dump(self, fmt='yaml'):
+        # Ordered keys
+        res = CommentedMap()
+        res['instance-type'] = self.instance_type
+        res['major-version'] = str(self.major_version)
+        res['min-tdc-version'] = str(self.min_tdc_version)
+        res['max-tdc-version'] = str(self.max_tdc_version)
+        res['hot-fix-ranges'] = list()
+        for vrange in self.hot_fix_ranges:
+            res['hot-fix-ranges'].append({
+                'max': str(vrange[0]),
+                'min': str(vrange[1])
+            })
+
+        res['images'] = list()
+        for var, name in self.images:
+            res['images'].append({'variable': var, 'name': name})
+
+        res['releases'] = list()
+        for r in self.ordered_releases:
+            robj = CommentedMap()
+            robj['release-version'] = str(r.release_version)
+            
+            robj['image-version'] = dict()
+            for img_name, ver in r.image_version.items():
+                robj['image-version'][img_name] = str(ver)
+            robj['dependencies'] = list()
+            for instance, (minv, maxv) in r.dependencies.items():
+                robj['dependencies'].append({
+                    'max-version': str(maxv),
+                    'min-version': str(minv),
+                    'type': instance
+                })
+            robj['final'] = r.is_final
+            res['releases'].append(robj)
+
+        dumpers = {
+            'yaml': lambda x: ruamel.yaml.round_trip_dump(x, sys.stdout)
+        }
+
+        if fmt not in dumpers:
+            return NotImplemented
+
+        return dumpers.get(fmt)(res)
+
 
 class Release(object):
     """ The metadata of a specific versioned release.

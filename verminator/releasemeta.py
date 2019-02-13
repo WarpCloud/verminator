@@ -1,3 +1,15 @@
+# Meta data for release info in yaml, e.g.,
+# **********************
+# Releases:
+# - products:
+#   - {max: tos-1.8.0.1, min: tos-1.8.0.1}
+#   - {max: transwarp-5.1.0-final, min: transwarp-5.1.0-final}
+#   release_name: tdc-1.0.0-rc1
+# - products:
+#   - {max: tos-1.8.0-rc2, min: tos-1.8.0-rc2}
+#   - {max: transwarp-5.1.0-final, min: transwarp-5.1.0-final}
+#   release_name: tdc-1.0.0-rc2
+#************************
 from ruamel.yaml import YAML
 
 from .utils import *
