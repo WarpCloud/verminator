@@ -81,11 +81,20 @@ def _concatenate_vranges_with_same_prefix(vranges, hard_merging=False):
             # Ranges connected directly:
             # * Overlapping ranges
             # * adjacent suffix versions
-            if cmin.suffix is not None and pmin.suffix is not None and \
-                (FlexVersion.in_range(cmin, pmin, pmax) \
-                    or cmin == pmax.add(VersionDelta(sver=1))):
-                res[-1] = (pmin, cmax)
-                continue
+            if cmin.suffix is not None and pmin.suffix is not None:
+                if cmin == pmax.add(VersionDelta(sver=1)):
+                    res[-1] = (pmin, cmax)
+                    continue
+                else:
+                    overlapped = pmin.in_range(cmin, cmax) \
+                        or pmax.in_range(cmin, cmax) \
+                        or cmin.in_range(pmin, pmax) \
+                        or cmax.in_range(pmin, pmax)
+                    if overlapped:
+                        minv = cmin if cmin < pmin else pmin
+                        maxv = cmax if cmax > pmax else pmax
+                        res[-1] = (minv, maxv)
+                        continue
 
             # Ranges between rc and final
             if pmax.substitute(cmin, ignore_suffix=True) == VersionDelta.zero \
@@ -105,3 +114,13 @@ def _concatenate_vranges_with_same_prefix(vranges, hard_merging=False):
             res[-1] = (pmin, cmax)
 
     return res
+
+
+if __name__ == '__main__':
+    vranges = [
+        (FlexVersion.parse_version('sophonweb-1.2.0-final'),
+            FlexVersion.parse_version('sophonweb-2.2.0-final')),
+        (FlexVersion.parse_version('sophonweb-1.3.0-rc0'),
+            FlexVersion.parse_version('sophonweb-1.3.0-rc3'))
+    ]
+    print(concatenate_vranges(vranges))
