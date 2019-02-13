@@ -269,7 +269,7 @@ class Instance(object):
             res['releases'].append(robj)
 
         dumpers = {
-            'yaml': lambda x: ruamel.yaml.round_trip_dump(x, sys.stdout)
+            'yaml': lambda x: ruamel.yaml.round_trip_dump(x)
         }
 
         if fmt not in dumpers:

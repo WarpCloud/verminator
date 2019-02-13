@@ -1,4 +1,5 @@
 from functools import cmp_to_key
+import copy
 
 from flex_version import FlexVersion, VersionMeta, VersionDelta
 
@@ -9,6 +10,8 @@ FlexVersion.ordered_suffix = ['rc', 'final', None]
 def parse_version(version, minor_versioned_only=False):
     if not isinstance(version, VersionMeta):
         version = FlexVersion.parse_version(version)
+    else:
+        version = copy.deepcopy(version)
 
     if minor_versioned_only:
         version.maintenance = None

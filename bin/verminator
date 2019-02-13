@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+import sys
+import argparse
+import os
+from pathlib import Path
+
+from ruamel.yaml import YAML
+
+from verminator import *
+from verminator.utils import *
+
+# yaml = YAML()
+# dat = yaml.load(
+#     open('/home/chenxm/Documents/Workspace/product-meta/instances/cas/1.0/images.yaml')
+# )
+# ins = Instance(**dat)
+
+# meta = ProductReleaseMeta(
+#     '/home/chenxm/Documents/Workspace/product-meta/instances/releases_meta.yaml')	
+# # print(meta.releases)
+# # print(meta.minor_versioned_releases)
+
+# # cv = meta.get_compatible_versions('sophonweb-2.0.0-final')
+# # print(cv)
+
+# # cv = meta.get_compatible_versions('transwarp-5.2')
+# # print(cv)
+
+# ins.validate(meta)
+# ins.dump()
+
+class VerminatorCmd(object):
+
+    def __init__(self):
+        parser = argparse.ArgumentParser(
+            description='TDC image version management terminator.',
+            usage= '''verminator <command> [<args>]
+
+The most commonly used verminator commands are:
+   validate    Validate existing image versions and fix errors automatically
+   create      Create a new release version
+''')
+        parser.add_argument('command', help='Subcommand to run')
+        args = parser.parse_args(sys.argv[1:2])
+        if not hasattr(self, args.command):
+            print('Unrecognized command')
+            parser.print_help()
+            exit(1)
+        getattr(self, args.command)()
+
+    def validate(self):
+        parser = argparse.ArgumentParser(
+            description='Validate existing image versions and fix errors automatically')
+        parser.add_argument('--releasemeta')
+        parser.add_argument('instance_folder')
+        args = parser.parse_args(sys.argv[2:])
+        print('Running validation, instance_folder=%s, releasemeta=%s' % \
+        	(args.instance_folder, args.releasemeta))
+        walk_through(args.instance_folder, args.releasemeta)
+
+    def create(self):
+        parser = argparse.ArgumentParser(
+            description='Create a new release version')
+        # NOT prefixing the argument with -- means it's not optional
+        parser.add_argument('version')
+        args = parser.parse_args(sys.argv[2:])
+        print('Running creation, version=%s' % args.version)
+
+
+def walk_through(instance_folder, releasemeta=None):
+	p = Path(instance_folder)
+	assert p.is_dir()
+
+	if releasemeta is not None:
+		releasemeta = Path(releasemeta)
+	else:
+		releasemeta = p.joinpath('releases_meta.yaml')
+	assert releasemeta.is_file()
+
+	meta = ProductReleaseMeta(releasemeta)
+	# print(meta.releases)
+
+	yaml = YAML()
+
+	for instance in p.iterdir():
+		if not instance.is_dir():
+			continue
+		for ver in instance.iterdir():
+			image_file = ver.joinpath('images.yaml')			
+			
+			print(image_file)
+			
+			dat = yaml.load(image_file)
+			ins = Instance(**dat)
+			ins.validate(meta)
+
+			with open(image_file, 'w') as of:
+				of.write(ins.dump())
+
+if __name__ == '__main__':
+    VerminatorCmd()
+
