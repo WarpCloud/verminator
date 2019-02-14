@@ -104,7 +104,7 @@ class Instance(object):
 
         # Validate the release version should fall into min-max tdc range
         if get_product_name(r.release_version) == 'tdc' \
-            and r.release_version.suffix is not None:
+                and r.release_version.suffix is not None:
             assert r.release_version.in_range(
                 self._min_tdc_version, self._max_tdc_version
             ), 'The release {} of "{}" should in min-max tdc versions'.format(
@@ -151,7 +151,7 @@ class Instance(object):
                 raise ValueError('The final version %s is illage' % r.release_version)
 
     def _validate_hot_fix_ranges(self):
-        # Differenciate complete and minor-versioned-only versions
+        # Differentiate complete and minor-versioned-only versions
         complete_ranges = list()
         minor_versioned = list()
         for minv, maxv in self._hot_fix_ranges:
@@ -180,10 +180,11 @@ class Instance(object):
             product = get_product_name(release.release_version)
             if product == 'tdc':
                 for dep, (minv, maxv) in release.dependencies.items():
-                    assert get_product_name(minv) == product, \
-                        'TDC should be independent of other product lines ' + \
-                        'instance "{}", version {}, dependency "{}"'\
-                        .format(release.instance_type, release.release_version, dep)
+                    if get_product_name(minv) != product:
+                        print(('Warning: TDC should be independent of ' +
+                               'other product lines instance "{}", ' +
+                               'version {}, dependency "{}"')
+                              .format(release.instance_type, release.release_version, dep))
 
     def _validate_releases(self, releasemeta):
         for r in self.ordered_releases:
@@ -203,8 +204,9 @@ class Instance(object):
                             filtered.append(fv)
 
                     if not filtered:
-                        print('Warning: Release {} of instance "{}" is filtered out by min-max tdc version.'\
-                            .format(r.release_version, r.instance_type))
+                        print(('Warning: Release {} of instance "{}" ' +
+                               'is filtered out by min-max tdc version.')
+                              .format(r.release_version, r.instance_type))
 
                     cv[pname] = filtered
 
@@ -213,20 +215,24 @@ class Instance(object):
                 product = get_product_name(vrange[0])
                 if product in cv:
                     if len(cv[product]) == 0:
-                        raise ValueError('No valid version range declared for instance {}, version {} in releasemeta'\
-                            .format(self.instance_type, r.release_version)
-                        )
+                        raise ValueError(('No valid version range declared for ' +
+                                          'instance {}, version {} in releasemeta')
+                                         .format(self.instance_type, r.release_version))
                     minv, maxv = cv[product][0]
                 else:
                     minv, maxv = vrange
 
                 if minv != vrange[0]:
-                    print('Warning: incompatible min version {} (should be {}) for dependency "{}" of release "{}" version {}'\
-                        .format(vrange[0], minv, instance, r.instance_type, r.release_version))
+                    print(('Warning: incompatible min version {} ' +
+                           '(should be {}) for dependency "{}" ' +
+                           'of release "{}" version {}')
+                          .format(vrange[0], minv, instance, r.instance_type, r.release_version))
 
                 if maxv != vrange[1]:
-                    print('Warning: incompatible max version {} (should be {}) for dependency "{}" of release "{}" version {}'\
-                        .format(vrange[1], maxv, instance, r.instance_type, r.release_version))
+                    print(('Warning: incompatible max version {} ' +
+                           '(should be {}) for dependency "{}" ' +
+                           'of release "{}" version {}')
+                          .format(vrange[1], maxv, instance, r.instance_type, r.release_version))
 
                 r.dependencies[instance] = (minv, maxv)
 
@@ -252,7 +258,7 @@ class Instance(object):
         for r in self.ordered_releases:
             robj = OrderedDict()
             robj['release-version'] = str(r.release_version)
-            
+
             robj['image-version'] = dict()
             for img_name, ver in r.image_version.items():
                 robj['image-version'][img_name] = str(ver)
@@ -295,7 +301,8 @@ class Release(object):
                 raise ValueError('Invalid min-max version declaim for dependency of %s for %s %s'
                                  % (instance_type,
                                     self.instance_type,
-                                    self.release_version))
+                                    self.release_version)
+                                 )
 
             if instance_type in self.dependencies:
                 raise ValueError('Duplicated dependency of %s for %s %s' %
