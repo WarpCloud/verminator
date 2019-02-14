@@ -59,6 +59,9 @@ setup(
     author_email='xiaming.chen@transwarp.io',
     description='TDC image Version management tERMINATOR.',
     install_requires=install_requires,
+    scripts = [
+        'bin/verminator'
+    ],
     keywords=['utility', 'versioning'],
     classifiers=[
         'Development Status :: 4 - Beta',

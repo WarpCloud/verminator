@@ -10,8 +10,7 @@
 #   - {max: transwarp-5.1.0-final, min: transwarp-5.1.0-final}
 #   release_name: tdc-1.0.0-rc2
 #************************
-from ruamel.yaml import YAML
-
+import yaml
 from .utils import *
 
 
@@ -23,7 +22,6 @@ class ProductReleaseMeta(object):
     """
 
     def __init__(self, yaml_file):
-        yaml = YAML()
         self._raw_data = yaml.load(open(yaml_file))
         self._releases = self._load_releases()
         self._minor_versioned_releases = self._load_releases(True)

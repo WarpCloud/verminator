@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 import sys
 from collections import OrderedDict
-import ruamel.yaml
-from ruamel.yaml.comments import CommentedMap
 
 from .utils import *
 
@@ -232,9 +230,9 @@ class Instance(object):
 
                 r.dependencies[instance] = (minv, maxv)
 
-    def dump(self, fmt='yaml'):
+    def to_yaml(self, stream=None, **kwargs):
         # Ordered keys
-        res = CommentedMap()
+        res = OrderedDict()
         res['instance-type'] = self.instance_type
         res['major-version'] = str(self.major_version)
         res['min-tdc-version'] = str(self.min_tdc_version)
@@ -252,7 +250,7 @@ class Instance(object):
 
         res['releases'] = list()
         for r in self.ordered_releases:
-            robj = CommentedMap()
+            robj = OrderedDict()
             robj['release-version'] = str(r.release_version)
             
             robj['image-version'] = dict()
@@ -268,14 +266,7 @@ class Instance(object):
             robj['final'] = r.is_final
             res['releases'].append(robj)
 
-        dumpers = {
-            'yaml': lambda x: ruamel.yaml.round_trip_dump(x)
-        }
-
-        if fmt not in dumpers:
-            return NotImplemented
-
-        return dumpers.get(fmt)(res)
+        return ordered_yaml_dump(res, default_flow_style=False)
 
 
 class Release(object):

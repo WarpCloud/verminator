@@ -3,31 +3,9 @@ import sys
 import argparse
 import os
 from pathlib import Path
-
-from ruamel.yaml import YAML
-
+import yaml
 from verminator import *
 from verminator.utils import *
-
-# yaml = YAML()
-# dat = yaml.load(
-#     open('/home/chenxm/Documents/Workspace/product-meta/instances/cas/1.0/images.yaml')
-# )
-# ins = Instance(**dat)
-
-# meta = ProductReleaseMeta(
-#     '/home/chenxm/Documents/Workspace/product-meta/instances/releases_meta.yaml')	
-# # print(meta.releases)
-# # print(meta.minor_versioned_releases)
-
-# # cv = meta.get_compatible_versions('sophonweb-2.0.0-final')
-# # print(cv)
-
-# # cv = meta.get_compatible_versions('transwarp-5.2')
-# # print(cv)
-
-# ins.validate(meta)
-# ins.dump()
 
 class VerminatorCmd(object):
 
@@ -51,12 +29,14 @@ The most commonly used verminator commands are:
     def validate(self):
         parser = argparse.ArgumentParser(
             description='Validate existing image versions and fix errors automatically')
-        parser.add_argument('--releasemeta')
-        parser.add_argument('instance_folder')
+        parser.add_argument('--releasemeta', help='the releases_meta.yml file')
+        parser.add_argument('-c', '--component', help='a specific instance to validate')
+        parser.add_argument('-d', '--dump', action='store_true', help='dump the validated content to files')
+        parser.add_argument('instance_folder', help='the instances folder of images definition')
         args = parser.parse_args(sys.argv[2:])
         print('Running validation, instance_folder=%s, releasemeta=%s' % \
         	(args.instance_folder, args.releasemeta))
-        walk_through(args.instance_folder, args.releasemeta)
+        walk_through(args.instance_folder, args.releasemeta, args.component, args.dump)
 
     def create(self):
         parser = argparse.ArgumentParser(
@@ -67,7 +47,7 @@ The most commonly used verminator commands are:
         print('Running creation, version=%s' % args.version)
 
 
-def walk_through(instance_folder, releasemeta=None):
+def walk_through(instance_folder, releasemeta=None, component=None, dump=False):
 	p = Path(instance_folder)
 	assert p.is_dir()
 
@@ -78,24 +58,37 @@ def walk_through(instance_folder, releasemeta=None):
 	assert releasemeta.is_file()
 
 	meta = ProductReleaseMeta(releasemeta)
-	# print(meta.releases)
 
-	yaml = YAML()
-
+	component_found = False
 	for instance in p.iterdir():
 		if not instance.is_dir():
 			continue
+
+		if component is not None:
+			if instance.name != component:
+				continue
+			else:
+				component_found = True
+
 		for ver in instance.iterdir():
 			image_file = ver.joinpath('images.yaml')			
 			
 			print(image_file)
 			
-			dat = yaml.load(image_file)
+			dat = yaml.load(open(image_file))
 			ins = Instance(**dat)
 			ins.validate(meta)
 
-			with open(image_file, 'w') as of:
-				of.write(ins.dump())
+			yaml_str = ins.to_yaml()
+			if yaml_str and dump:
+				with open(image_file, 'w') as of:
+					of.write(yaml_str)
+			else:
+				print(yaml_str)
+
+	if component is not None and not component_found:
+		print('Warning: component %s not found in folder %s' % (component, instance_folder))
+
 
 if __name__ == '__main__':
     VerminatorCmd()
