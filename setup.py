@@ -44,7 +44,7 @@ def walk_path_files(directory, target_folder=None):
 
 data_files = []
 
-requirements = open('requirements.txt').readlines()
+requirements = open(os.path.join(os.path.dirname(__file__), 'requirements.txt')).readlines()
 install_requires = [i.strip('\r\n ') for i in requirements]
 
 setup(

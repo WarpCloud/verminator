@@ -1,0 +1,17 @@
+include README.md
+include MANIFEST.in
+include HISTORY.md
+include requirements.txt
+include requirements-testing.txt
+include Makefile
+include setup.py
+include testing.sh
+
+graft bin
+graft tests
+graft verminator
+
+global-exclude __pycache__
+global-exclude *.log
+
+global-include *.py[co]
