@@ -15,8 +15,9 @@ class VerminatorCmd(object):
             usage= '''verminator <command> [<args>]
 
 The most commonly used verminator commands are:
-   validate    Validate existing image versions and fix errors automatically
-   create      Create a new release version
+   validate         Validate existing image versions and fix errors automatically
+   createversion    Create a new release version
+   createoem		Create an OEM release
 ''')
         parser.add_argument('command', help='Subcommand to run')
         args = parser.parse_args(sys.argv[1:2])
@@ -38,13 +39,17 @@ The most commonly used verminator commands are:
         	(args.instance_folder, args.releasemeta))
         walk_through(args.instance_folder, args.releasemeta, args.component, args.dump)
 
-    def create(self):
-        parser = argparse.ArgumentParser(
-            description='Create a new release version')
-        # NOT prefixing the argument with -- means it's not optional
+    def createversion(self):
+        parser = argparse.ArgumentParser(description='Create a new release version')
         parser.add_argument('version')
         args = parser.parse_args(sys.argv[2:])
         print('Running creation, version=%s' % args.version)
+
+    def createoem(self):
+        parser = argparse.ArgumentParser(description='Create an OEM release')
+        parser.add_argument('oemname')
+        args = parser.parse_args(sys.argv[2:])
+        print('Running creating OEM, oemname=%s' % args.oemname)
 
 
 def walk_through(instance_folder, releasemeta=None, component=None, dump=False):
