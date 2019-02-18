@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-import sys
-from collections import OrderedDict
-
 from .utils import *
 
 __all__ = ['Instance', 'Release']
@@ -10,6 +7,8 @@ __all__ = ['Instance', 'Release']
 class Instance(object):
     """A versioned instance
     """
+    OEM_TDC = 'tdc'
+    OEM_NAME = 'tdc'
 
     def __init__(self, **kwargs):
         self.instance_type = kwargs.get('instance-type')
@@ -18,6 +17,7 @@ class Instance(object):
         self._min_tdc_version = parse_version(
             kwargs.get('min-tdc-version', None)
         )
+
         self._max_tdc_version = parse_version(
             kwargs.get('max-tdc-version', None))
 
@@ -103,7 +103,7 @@ class Instance(object):
                     image_name, self.instance_type)
 
         # Validate the release version should fall into min-max tdc range
-        if get_product_name(r.release_version) == 'tdc' \
+        if get_product_name(r.release_version) == self.OEM_NAME \
                 and r.release_version.suffix is not None:
             assert r.release_version.in_range(
                 self._min_tdc_version, self._max_tdc_version
@@ -130,7 +130,7 @@ class Instance(object):
             # Third-party images, ignored
             self._validate_final_flag()
             self._validate_hot_fix_ranges()
-            # self._validate_tdc_not_dependent_on_other_product_lines()
+            self._validate_tdc_not_dependent_on_other_product_lines()
             self._validate_releases(release_meta)
 
     def _is_third_party(self):
@@ -178,12 +178,10 @@ class Instance(object):
     def _validate_tdc_not_dependent_on_other_product_lines(self):
         for release in self._releases.values():
             product = get_product_name(release.release_version)
-            if product == 'tdc':
+            if product == self.OEM_NAME:
                 for dep, (minv, maxv) in release.dependencies.items():
                     if get_product_name(minv) != product:
-                        print(('Warning: TDC should be independent of ' +
-                               'other product lines instance "{}", ' +
-                               'version {}, dependency "{}"')
+                        print('Warning: TDC should be independent product, instance "{}", {}, dep "{}"'
                               .format(release.instance_type, release.release_version, dep))
 
     def _validate_releases(self, releasemeta):
@@ -195,7 +193,7 @@ class Instance(object):
             minor_versioned_only = is_minor_versioned_only(r.release_version)
             minv = parse_version(self.min_tdc_version, minor_versioned_only)
             maxv = parse_version(self.max_tdc_version, minor_versioned_only)
-            if get_product_name(r.release_version) == 'tdc':
+            if get_product_name(r.release_version) == self.OEM_NAME:
                 for pname in cv:
                     filtered = list()
                     for vrange in cv[pname]:
@@ -204,8 +202,7 @@ class Instance(object):
                             filtered.append(fv)
 
                     if not filtered:
-                        print(('Warning: Release {} of instance "{}" ' +
-                               'is filtered out by min-max tdc version.')
+                        print('Warning: Release {} of instance "{}" is filtered out by min-max tdc version.'
                               .format(r.release_version, r.instance_type))
 
                     cv[pname] = filtered
@@ -215,28 +212,26 @@ class Instance(object):
                 product = get_product_name(vrange[0])
                 if product in cv:
                     if len(cv[product]) == 0:
-                        raise ValueError(('No valid version range declared for ' +
-                                          'instance {}, version {} in releasemeta')
-                                         .format(self.instance_type, r.release_version))
+                        raise ValueError(
+                            'No valid version range declared for instance {}, version {} in releasemeta'
+                                .format(self.instance_type, r.release_version)
+                        )
                     minv, maxv = cv[product][0]
                 else:
                     minv, maxv = vrange
 
                 if minv != vrange[0]:
-                    print(('Warning: incompatible min version {} ' +
-                           '(should be {}) for dependency "{}" ' +
-                           'of release "{}" version {}')
+                    print('Warning: incompatible min version {} (should be {}) for dep "{}" of release "{}" version {}'
                           .format(vrange[0], minv, instance, r.instance_type, r.release_version))
 
                 if maxv != vrange[1]:
-                    print(('Warning: incompatible max version {} ' +
-                           '(should be {}) for dependency "{}" ' +
-                           'of release "{}" version {}')
+                    print('Warning: incompatible max version {} (should be {}) for dep "{}" of release "{}" version {}'
                           .format(vrange[1], maxv, instance, r.instance_type, r.release_version))
 
                 r.dependencies[instance] = (minv, maxv)
 
     def to_yaml(self, stream=None, **kwargs):
+
         # Ordered keys
         res = OrderedDict()
         res['instance-type'] = self.instance_type
@@ -274,6 +269,16 @@ class Instance(object):
 
         return ordered_yaml_dump(res, default_flow_style=False)
 
+    def convert_oem(self):
+        self._hot_fix_ranges = [
+            (
+                replace_product_name(minv, self.OEM_NAME, by=self.OEM_TDC),
+                replace_product_name(maxv, self.OEM_NAME, by=self.OEM_TDC)
+            ) for minv, maxv in self._hot_fix_ranges
+        ]
+        for rver, release in self._releases.items():
+            self._releases[rver] = release.convert_oem(self.OEM_NAME, self.OEM_TDC)
+
 
 class Release(object):
     """ The metadata of a specific versioned release.
@@ -281,8 +286,7 @@ class Release(object):
 
     def __init__(self, instance_type, val):
         self.instance_type = instance_type
-        self.release_version = parse_version(
-            val.get('release-version'))
+        self.release_version = parse_version(val.get('release-version'))
         self.is_final = val.get('final', False)
 
         # Images
@@ -310,3 +314,15 @@ class Release(object):
                                   self.release_version))
             else:
                 self.dependencies[instance_type] = (_min_ver, _max_ver)
+
+    def convert_oem(self, oemname, by=Instance.OEM_TDC):
+        self.release_version = replace_product_name(self.release_version, oemname, by)
+        for image_name, ver in self.image_version.items():
+            self.image_version[image_name] = replace_product_name(ver, oemname, by)
+        for instance, vrange in self.dependencies.items():
+            minv, maxv = vrange
+            self.dependencies[instance] = (
+                replace_product_name(minv, oemname, by),
+                replace_product_name(maxv, oemname, by)
+            )
+        return self

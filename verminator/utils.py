@@ -1,8 +1,8 @@
+import copy
 from collections import OrderedDict
 from functools import cmp_to_key
-import copy
-import yaml
 
+import yaml
 from flex_version import FlexVersion, VersionMeta, VersionDelta
 
 # Customized version suffix ordering
@@ -10,13 +10,14 @@ FlexVersion.ordered_suffix = ['rc', 'final', None]
 
 
 def ordered_yaml_load(yaml_path, Loader=yaml.Loader,
-                    object_pairs_hook=OrderedDict):
+                      object_pairs_hook=OrderedDict):
     class OrderedLoader(Loader):
         pass
 
     def construct_mapping(loader, node):
         loader.flatten_mapping(node)
         return object_pairs_hook(loader.construct_pairs(node))
+
     OrderedLoader.add_constructor(
         yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
         construct_mapping)
@@ -32,6 +33,7 @@ def ordered_yaml_dump(data, stream=None, Dumper=yaml.SafeDumper, **kwds):
         return dumper.represent_mapping(
             yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
             data.items())
+
     OrderedDumper.add_representer(OrderedDict, _dict_representer)
     return yaml.dump(data, stream, OrderedDumper, **kwds)
 
@@ -56,12 +58,21 @@ def get_product_name(version):
     return version.prefix
 
 
+def replace_product_name(version, newname, by=None):
+    version = parse_version(version)
+    if by is not None and version.prefix == by:
+        version.prefix = newname
+    elif by is None:
+        version.prefix = newname
+    return version
+
+
 def is_minor_versioned_only(version):
     version = parse_version(version)
     return version.maintenance is None \
-        and version.build is None \
-        and version.suffix is None \
-        and version.suffix_version is None
+           and version.build is None \
+           and version.suffix is None \
+           and version.suffix_version is None
 
 
 def filter_vrange(this, other):
@@ -89,7 +100,7 @@ def concatenate_vranges(vranges, hard_merging=False):
         prefixes[prefix].append(vrange)
 
     concatenated = [_concatenate_vranges_with_same_prefix(vranges, hard_merging) \
-        for vranges in prefixes.values()]
+                    for vranges in prefixes.values()]
     return [y for x in concatenated for y in x]
 
 
@@ -116,9 +127,9 @@ def _concatenate_vranges_with_same_prefix(vranges, hard_merging=False):
                     continue
                 else:
                     overlapped = pmin.in_range(cmin, cmax) \
-                        or pmax.in_range(cmin, cmax) \
-                        or cmin.in_range(pmin, pmax) \
-                        or cmax.in_range(pmin, pmax)
+                                 or pmax.in_range(cmin, cmax) \
+                                 or cmin.in_range(pmin, pmax) \
+                                 or cmax.in_range(pmin, pmax)
                     if overlapped:
                         minv = cmin if cmin < pmin else pmin
                         maxv = cmax if cmax > pmax else pmax
@@ -127,7 +138,7 @@ def _concatenate_vranges_with_same_prefix(vranges, hard_merging=False):
 
             # Ranges between rc and final
             if pmax.substitute(cmin, ignore_suffix=True) == VersionDelta.zero \
-                and pmax.suffix == 'rc' and cmin.suffix == 'final':
+                    and pmax.suffix == 'rc' and cmin.suffix == 'final':
                 res[-1] = (pmin, cmax)
                 continue
 
@@ -148,8 +159,12 @@ def _concatenate_vranges_with_same_prefix(vranges, hard_merging=False):
 if __name__ == '__main__':
     vranges = [
         (FlexVersion.parse_version('sophonweb-1.2.0-final'),
-            FlexVersion.parse_version('sophonweb-2.2.0-final')),
+         FlexVersion.parse_version('sophonweb-2.2.0-final')),
         (FlexVersion.parse_version('sophonweb-1.3.0-rc0'),
-            FlexVersion.parse_version('sophonweb-1.3.0-rc3'))
+         FlexVersion.parse_version('sophonweb-1.3.0-rc3'))
     ]
     print(concatenate_vranges(vranges))
+
+    assert str(replace_product_name('tdc-1.2', 'gzes')) == 'gzes-1.2'
+    assert str(replace_product_name('transwarp-1.2', 'gzes', by='tdc')) == 'transwarp-1.2'
+    assert str(replace_product_name('tdc-1.2', 'gzes', by='tdc')) == 'gzes-1.2'

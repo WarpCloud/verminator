@@ -29,6 +29,7 @@ from setuptools import setup, find_packages
 
 __version__ = '1.0.0'
 
+
 def walk_path_files(directory, target_folder=None):
     res = {}
     for subdir, dir, files in os.walk(directory):
@@ -41,6 +42,7 @@ def walk_path_files(directory, target_folder=None):
         for fname in files:
             res[target].append(os.path.join(subdir, fname))
     return res
+
 
 data_files = []
 
@@ -59,7 +61,7 @@ setup(
     author_email='xiaming.chen@transwarp.io',
     description='TDC image Version management tERMINATOR.',
     install_requires=install_requires,
-    scripts = [
+    scripts=[
         'bin/verminator'
     ],
     keywords=['utility', 'versioning'],
@@ -73,5 +75,5 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Topic :: Software Development :: Libraries :: Python Modules',
-   ],
+    ],
 )
