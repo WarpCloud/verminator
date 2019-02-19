@@ -17,7 +17,7 @@ class VerminatorCmd(object):
 The most commonly used verminator commands are:
    validate         Validate existing image versions and fix errors automatically
    createversion    Create a new release version
-   convertoem		Convert TDC into OEM release
+   createoem		Convert TDC into OEM release
 ''')
         parser.add_argument('command', help='Subcommand to run')
         args = parser.parse_args(sys.argv[1:2])
@@ -30,14 +30,13 @@ The most commonly used verminator commands are:
     def validate(self):
         parser = argparse.ArgumentParser(
             description='Validate existing image versions and fix errors automatically')
-        parser.add_argument('--releasemeta', help='the releases_meta.yml file')
         parser.add_argument('-c', '--component', help='a specific instance to validate')
-        parser.add_argument('-d', '--dump', action='store_true', help='dump the validated content to files')
+        parser.add_argument('--releasemeta', help='the releases_meta.yml file')
         parser.add_argument('instance_folder', help='the instances folder of images definition')
         args = parser.parse_args(sys.argv[2:])
         print('Running validation, instance_folder=%s, releasemeta=%s' % \
               (args.instance_folder, args.releasemeta))
-        validate_instances(args.instance_folder, args.releasemeta, args.component, args.dump)
+        _validate_instances(args.instance_folder, args.releasemeta, args.component, args.dump)
 
     def createversion(self):
         parser = argparse.ArgumentParser(description='Create a new release version')
@@ -45,16 +44,19 @@ The most commonly used verminator commands are:
         args = parser.parse_args(sys.argv[2:])
         print('Running version creation, version=%s' % args.version)
 
-    def convertoem(self):
+    def createoem(self):
         parser = argparse.ArgumentParser(description='Create an OEM release')
-        parser.add_argument('-o', '--oemname', help='an oem name')
+        parser.add_argument('-o', '--oemname', required=True, help='an oem name')
         parser.add_argument('instance_folder', help='the instances folder of images definition')
         args = parser.parse_args(sys.argv[2:])
         print('Running OEM creation, oemname=%s' % args.oemname)
-        convert_oem(args.oemname, args.instance_folder)
+        VerminatorConfig.OEM_NAME = args.oemname
+        _convert_oem(args.oemname, args.instance_folder)
+        print('Running validation')
+        _validate_instances(args.instance_folder)
 
 
-def validate_instances(instance_folder, releasemeta=None, component=None, dump=False):
+def _validate_instances(instance_folder, releasemeta=None, component=None):
     p = Path(instance_folder)
     assert p.is_dir()
 
@@ -87,7 +89,7 @@ def validate_instances(instance_folder, releasemeta=None, component=None, dump=F
             ins.validate(meta)
 
             yaml_str = ins.to_yaml()
-            if yaml_str and dump:
+            if yaml_str:
                 with open(image_file, 'w') as of:
                     of.write(yaml_str)
             else:
@@ -97,11 +99,9 @@ def validate_instances(instance_folder, releasemeta=None, component=None, dump=F
         print('Warning: component %s not found in folder %s' % (component, instance_folder))
 
 
-def convert_oem(oemname, instance_folder):
+def _convert_oem(oemname, instance_folder):
     p = Path(instance_folder)
     assert p.is_dir()
-
-    Instance.OEM_NAME = oemname
 
     for instance in p.iterdir():
         if not instance.is_dir():

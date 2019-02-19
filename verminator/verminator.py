@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from .config import VerminatorConfig as VC
 from .utils import *
 
 __all__ = ['Instance', 'Release']
@@ -7,7 +8,7 @@ __all__ = ['Instance', 'Release']
 class Instance(object):
     """A versioned instance
     """
-    OEM_TDC = 'tdc'
+    OFFICIAL_NAME = 'tdc'
     OEM_NAME = 'tdc'
 
     def __init__(self, **kwargs):
@@ -103,7 +104,7 @@ class Instance(object):
                     image_name, self.instance_type)
 
         # Validate the release version should fall into min-max tdc range
-        if get_product_name(r.release_version) == self.OEM_NAME \
+        if get_product_name(r.release_version) == VC.OEM_NAME \
                 and r.release_version.suffix is not None:
             assert r.release_version.in_range(
                 self._min_tdc_version, self._max_tdc_version
@@ -178,7 +179,7 @@ class Instance(object):
     def _validate_tdc_not_dependent_on_other_product_lines(self):
         for release in self._releases.values():
             product = get_product_name(release.release_version)
-            if product == self.OEM_NAME:
+            if product == VC.OEM_NAME:
                 for dep, (minv, maxv) in release.dependencies.items():
                     if get_product_name(minv) != product:
                         print('Warning: TDC should be independent product, instance "{}", {}, dep "{}"'
@@ -186,21 +187,26 @@ class Instance(object):
 
     def _validate_releases(self, releasemeta):
         for r in self.ordered_releases:
+
             # Get compatible version ranges for each product
+            #   {product: [(minv, maxv), (minv, maxv)]}
             cv = releasemeta.get_compatible_versions(r.release_version)
 
             # Filter vrange by tdc min-max version
             minor_versioned_only = is_minor_versioned_only(r.release_version)
-            minv = parse_version(self.min_tdc_version, minor_versioned_only)
-            maxv = parse_version(self.max_tdc_version, minor_versioned_only)
-            if get_product_name(r.release_version) == self.OEM_NAME:
+            minv = parse_version(self._min_tdc_version, minor_versioned_only)
+            maxv = parse_version(self._max_tdc_version, minor_versioned_only)
+
+            if get_product_name(r.release_version) == VC.OEM_NAME:
                 for pname in cv:
                     filtered = list()
-                    for vrange in cv[pname]:
-                        fv = filter_vrange(vrange, (minv, maxv))
+                    print(minv, maxv)
+                    print(pname, cv[pname])
+                    for v in cv[pname]:
+                        fv = filter_vrange(v, (minv, maxv))
                         if fv is not None:
                             filtered.append(fv)
-
+                    print(filtered)
                     if not filtered:
                         print('Warning: Release {} of instance "{}" is filtered out by min-max tdc version.'
                               .format(r.release_version, r.instance_type))
@@ -230,7 +236,7 @@ class Instance(object):
 
                 r.dependencies[instance] = (minv, maxv)
 
-    def to_yaml(self, stream=None, **kwargs):
+    def to_yaml(self):
 
         # Ordered keys
         res = OrderedDict()
@@ -270,14 +276,16 @@ class Instance(object):
         return ordered_yaml_dump(res, default_flow_style=False)
 
     def convert_oem(self):
+        self._min_tdc_version = replace_product_name(self._min_tdc_version, VC.OEM_NAME, VC.OFFICIAL_NAME)
+        self._max_tdc_version = replace_product_name(self._max_tdc_version, VC.OEM_NAME, VC.OFFICIAL_NAME)
         self._hot_fix_ranges = [
             (
-                replace_product_name(minv, self.OEM_NAME, by=self.OEM_TDC),
-                replace_product_name(maxv, self.OEM_NAME, by=self.OEM_TDC)
+                replace_product_name(minv, VC.OEM_NAME, by=VC.OFFICIAL_NAME),
+                replace_product_name(maxv, VC.OEM_NAME, by=VC.OFFICIAL_NAME)
             ) for minv, maxv in self._hot_fix_ranges
         ]
         for rver, release in self._releases.items():
-            self._releases[rver] = release.convert_oem(self.OEM_NAME, self.OEM_TDC)
+            self._releases[rver] = release.convert_oem(VC.OEM_NAME, VC.OFFICIAL_NAME)
 
 
 class Release(object):
@@ -315,7 +323,7 @@ class Release(object):
             else:
                 self.dependencies[instance_type] = (_min_ver, _max_ver)
 
-    def convert_oem(self, oemname, by=Instance.OEM_TDC):
+    def convert_oem(self, oemname, by=VC.OFFICIAL_NAME):
         self.release_version = replace_product_name(self.release_version, oemname, by)
         for image_name, ver in self.image_version.items():
             self.image_version[image_name] = replace_product_name(ver, oemname, by)

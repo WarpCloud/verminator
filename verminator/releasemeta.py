@@ -9,10 +9,9 @@
 #   - {max: tos-1.8.0-rc2, min: tos-1.8.0-rc2}
 #   - {max: transwarp-5.1.0-final, min: transwarp-5.1.0-final}
 #   release_name: tdc-1.0.0-rc2
-#************************
-import yaml
+# ************************
 from .utils import *
-
+from .config import VerminatorConfig as VC
 
 __all__ = ['ProductReleaseMeta']
 
@@ -66,7 +65,7 @@ class ProductReleaseMeta(object):
                     )[0]
 
         return res
-    
+
     def get_compatible_versions(self, version):
         """ Given a product line name and a specific version,
         return the compatible product version ranges.
@@ -80,7 +79,7 @@ class ProductReleaseMeta(object):
         releases = self._minor_versioned_releases \
             if minor_versioned_only else self._releases
 
-        if product == 'tdc':
+        if product == VC.OEM_NAME:
             if version not in releases:
                 raise ValueError('Version %s should be declared in releasemeta' % version)
 
@@ -88,8 +87,7 @@ class ProductReleaseMeta(object):
             for pname, vrange in products.items():
                 res[pname] = [vrange]
         else:
-            res['tdc'] = list()
-            filetered_products = list()
+            res[VC.OFFICIAL_NAME] = list()
             for rname, products in releases.items():
 
                 if product not in products:
@@ -102,8 +100,8 @@ class ProductReleaseMeta(object):
                     continue
 
                 # Remember TDC versions
-                res['tdc'] = concatenate_vranges(
-                    res['tdc'] + [(rname, rname)],
+                res[VC.OEM_NAME] = concatenate_vranges(
+                    res[VC.OEM_NAME] + [(rname, rname)],
                     hard_merging=minor_versioned_only
                 )
 
