@@ -87,7 +87,7 @@ class ProductReleaseMeta(object):
             for pname, vrange in products.items():
                 res[pname] = [vrange]
         else:
-            res[VC.OFFICIAL_NAME] = list()
+            res[VC.OEM_NAME] = list()
             for rname, products in releases.items():
 
                 if product not in products:

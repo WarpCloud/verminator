@@ -200,13 +200,10 @@ class Instance(object):
             if get_product_name(r.release_version) == VC.OEM_NAME:
                 for pname in cv:
                     filtered = list()
-                    print(minv, maxv)
-                    print(pname, cv[pname])
                     for v in cv[pname]:
                         fv = filter_vrange(v, (minv, maxv))
                         if fv is not None:
                             filtered.append(fv)
-                    print(filtered)
                     if not filtered:
                         print('Warning: Release {} of instance "{}" is filtered out by min-max tdc version.'
                               .format(r.release_version, r.instance_type))
