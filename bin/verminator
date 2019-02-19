@@ -102,7 +102,7 @@ def _validate_instances(instance_folder, releasemeta=None, component=None):
             print(image_file)
 
             dat = yaml.load(open(image_file))
-            ins = Instance(**dat)
+            ins = VersionedInstance(**dat)
             ins.validate(meta)
 
             yaml_str = ins.to_yaml()
@@ -119,18 +119,16 @@ def _validate_instances(instance_folder, releasemeta=None, component=None):
 def _create_oem(instance_folder, oemname):
     p = Path(instance_folder)
     assert p.is_dir()
-
     for instance in p.iterdir():
         if not instance.is_dir():
             continue
-
         for ver in instance.iterdir():
             image_file = ver.joinpath('images.yaml')
 
             print(image_file)
 
             dat = yaml.load(open(image_file))
-            ins = Instance(**dat)
+            ins = VersionedInstance(**dat)
             ins.convert_oem()
 
             yaml_str = ins.to_yaml()
@@ -139,7 +137,12 @@ def _create_oem(instance_folder, oemname):
 
 
 def _create_version(instance_folder, product=None, component=None):
-    pass
+    p = Path(instance_folder)
+    assert p.is_dir()
+    for instance in p.iterdir():
+        if not instance.is_dir():
+            continue
+
 
 
 if __name__ == '__main__':
