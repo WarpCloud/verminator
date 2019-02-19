@@ -36,13 +36,30 @@ The most commonly used verminator commands are:
         args = parser.parse_args(sys.argv[2:])
         print('Running validation, instance_folder=%s, releasemeta=%s' % \
               (args.instance_folder, args.releasemeta))
-        _validate_instances(args.instance_folder, args.releasemeta, args.component, args.dump)
+        _validate_instances(args.instance_folder, args.releasemeta, args.component)
 
     def createversion(self):
         parser = argparse.ArgumentParser(description='Create a new release version')
-        parser.add_argument('version')
+        parser.add_argument('-p', '--product', help='''
+a new version for product line, with value like "sophon-2.2.0-final" 
+or "sophon-1.3.0-final >>> sophon-2.2.0-final".
+''')
+        parser.add_argument('-c', '--component', help='''
+a new version for a component with value like "redis=3.1.0"
+or "inceptor=transwarp-5.2.3-final"
+or "redis=3.1.0 >>> redis=4.0.0"
+or "inceptor=transwarp-5.2 >>> inceptor=transwarp-6.0.1-final"
+''')
+        parser.add_argument('instance_folder', help='the instances folder of images definition')
         args = parser.parse_args(sys.argv[2:])
-        print('Running version creation, version=%s' % args.version)
+        if args.product is None and args.component is None:
+            print('Error: -p or -c is required')
+            parser.print_usage()
+            sys.exit(-1)
+        print('Running version creation')
+        _create_version(args.instance_folder, args.product, args.component)
+        print('Running validation')
+        _validate_instances(args.instance_folder)
 
     def createoem(self):
         parser = argparse.ArgumentParser(description='Create an OEM release')
@@ -51,7 +68,7 @@ The most commonly used verminator commands are:
         args = parser.parse_args(sys.argv[2:])
         print('Running OEM creation, oemname=%s' % args.oemname)
         VerminatorConfig.OEM_NAME = args.oemname
-        _convert_oem(args.oemname, args.instance_folder)
+        _create_oem(args.instance_folder, args.oemname)
         print('Running validation')
         _validate_instances(args.instance_folder)
 
@@ -99,7 +116,7 @@ def _validate_instances(instance_folder, releasemeta=None, component=None):
         print('Warning: component %s not found in folder %s' % (component, instance_folder))
 
 
-def _convert_oem(oemname, instance_folder):
+def _create_oem(instance_folder, oemname):
     p = Path(instance_folder)
     assert p.is_dir()
 
@@ -119,6 +136,10 @@ def _convert_oem(oemname, instance_folder):
             yaml_str = ins.to_yaml()
             with open(image_file, 'w') as of:
                 of.write(yaml_str)
+
+
+def _create_version(instance_folder, product=None, component=None):
+    pass
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 import unittest
-import os
 from pathlib import Path
+
 from verminator.releasemeta import ProductReleaseMeta
 
 
