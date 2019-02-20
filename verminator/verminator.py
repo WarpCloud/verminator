@@ -45,6 +45,8 @@ class Instance(object):
                 new_instance.create_release(version, ref_release)
                 self.versioned_instances[short_version] = new_instance
 
+            new_instance.validate_hot_fix_ranges()
+
     def dump(self):
         for ver, ins in self.versioned_instances.items():
             version_folder = self.instance_folder.joinpath(ver)
@@ -163,7 +165,7 @@ class VersionedInstance(object):
             )
 
         # Validate release that should fall into a specific hot fix range
-        self._validate_version_in_hot_fix_range(r.release_version)
+        self.validate_version_in_hot_fix_range(r.release_version)
 
         self._releases[r.release_version] = r
 
@@ -204,10 +206,10 @@ class VersionedInstance(object):
     def validate(self, release_meta):
         if not self._is_third_party():
             # Third-party images, ignored
-            self._validate_final_flag()
-            self._validate_hot_fix_ranges()
-            self._validate_tdc_not_dependent_on_other_product_lines()
-            self._validate_releases(release_meta)
+            self.validate_final_flag()
+            self.validate_hot_fix_ranges()
+            self.validate_tdc_not_dependent_on_other_product_lines()
+            self.validate_releases(release_meta)
 
     def _is_third_party(self):
         # Third-party images without product name
@@ -218,7 +220,7 @@ class VersionedInstance(object):
             return True
         return False
 
-    def _validate_final_flag(self):
+    def validate_final_flag(self):
         for r in self._releases.values():
             # Validate is_final flag and version format
             version = parse_version(r.release_version)
@@ -226,7 +228,7 @@ class VersionedInstance(object):
             if r.is_final and not is_valid_final:
                 raise ValueError('The final version %s is illage' % r.release_version)
 
-    def _validate_hot_fix_ranges(self):
+    def validate_hot_fix_ranges(self):
         # Differentiate complete and minor-versioned-only versions
         complete_ranges = list()
         minor_versioned = list()
@@ -241,7 +243,7 @@ class VersionedInstance(object):
         self._hot_fix_ranges = \
             concatenate_vranges(complete_ranges) + concatenate_vranges(minor_versioned)
 
-    def _validate_version_in_hot_fix_range(self, version):
+    def validate_version_in_hot_fix_range(self, version):
         found = False
         for _min, _max in self._hot_fix_ranges:
             if FlexVersion.in_range(version, _min, _max):
@@ -251,7 +253,7 @@ class VersionedInstance(object):
             'Release version %s of "%s" should be located in a specific hot-fix range' % \
             (version, self.instance_type)
 
-    def _validate_tdc_not_dependent_on_other_product_lines(self):
+    def validate_tdc_not_dependent_on_other_product_lines(self):
         for release in self._releases.values():
             product = product_name(release.release_version)
             if product == VC.OEM_NAME:
@@ -260,7 +262,7 @@ class VersionedInstance(object):
                         print('Warning: TDC should be independent product, instance "{}", {}, dep "{}"'
                               .format(release.instance_type, release.release_version, dep))
 
-    def _validate_releases(self, releasemeta):
+    def validate_releases(self, releasemeta):
         for r in self.ordered_releases:
 
             # Get compatible version ranges for each product
