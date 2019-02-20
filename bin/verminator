@@ -125,18 +125,22 @@ def _create_oem(instance_folder, oemname):
 
 
 def _create_version(instance_folder, version, component=None):
+    product = product_name(version)
     p = Path(instance_folder)
     assert p.is_dir()
     for instance_path in p.iterdir():
         if not instance_path.is_dir():
             continue
         instance = Instance(instance_path.name, instance_path)
+
         has_version_for_product = False
         for ver, ins in instance.versioned_instances.items():
-            if ins.find_latest_final_release(product_name(version)):
+            if ins.find_latest_final_release(product):
                 has_version_for_product = True
+
         if has_version_for_product:
             instance.create_release(version)
+
         instance.dump()
 
 

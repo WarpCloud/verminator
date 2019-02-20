@@ -32,7 +32,7 @@ class Instance(object):
         short_version = '{}.{}'.format(version.major, version.minor)
 
         if short_version in self.versioned_instances:
-            self.versioned_instances[short_version].create_release(version)
+            self.versioned_instances[short_version].create_release(version, None, True)
         else:
             latest_short_version = sorted(self.versioned_instances.keys(), reverse=True)[0]
             latest_instance = self.versioned_instances[latest_short_version]
@@ -42,10 +42,8 @@ class Instance(object):
             new_instance._releases = dict()
             ref_release = latest_instance.find_latest_final_release(product_name(version))
             if ref_release is not None:
-                new_instance.create_release(version, ref_release)
+                new_instance.create_release(version, ref_release, True)
                 self.versioned_instances[short_version] = new_instance
-
-            new_instance.validate_hot_fix_ranges()
 
     def dump(self):
         for ver, ins in self.versioned_instances.items():
@@ -80,7 +78,7 @@ class VersionedInstance(object):
 
         self._hot_fix_ranges = list()  # [(minv, maxv)]
         for item in kwargs.get('hot-fix-ranges', list):
-            self.add_host_fix_range(item.get('min'), item.get('max'))
+            self.add_hot_fix_range(item.get('min'), item.get('max'))
 
         self._images = dict()  # {var: name}
         for item in kwargs.get('images', dict()):
@@ -121,7 +119,7 @@ class VersionedInstance(object):
                 x.release_version, y.release_version)
         ))
 
-    def add_host_fix_range(self, _min, _max):
+    def add_hot_fix_range(self, _min, _max):
         if isinstance(_min, str):
             _min = parse_version(_min)
         if isinstance(_max, str):
@@ -148,46 +146,41 @@ class VersionedInstance(object):
 
     def add_release(self, release_dat):
         r = Release(self.instance_type, release_dat)
-
         # Validate the image completeness
         for image_name in r.image_version:
             assert image_name in self._images, \
                 'Image name %s of release %s should be declared first' % (
                     image_name, self.instance_type)
-
-        # Validate the release version should fall into min-max tdc range
-        if product_name(r.release_version) == VC.OEM_NAME \
-                and r.release_version.suffix is not None:
-            assert r.release_version.in_range(
-                self._min_tdc_version, self._max_tdc_version
-            ), 'The release {} of "{}" should in min-max tdc versions'.format(
-                r.release_version, r.instance_type
-            )
-
-        # Validate release that should fall into a specific hot fix range
-        self.validate_version_in_hot_fix_range(r.release_version)
-
         self._releases[r.release_version] = r
 
     def get_release(self, release_version, default=None):
         release_version = parse_version(release_version)
         return self._releases.get(release_version, default)
 
-    def create_release(self, version, from_release=None):
+    def create_release(self, version, from_release=None, with_minor_version=False):
         """Create a new release version
         """
         version = parse_version(version)
         assert version not in self._releases, 'Duplicated new version {} for {} {}'.format(
             version, self.instance_type, self.major_version
         )
+
         if from_release is None:
             from_release = self.find_latest_final_release(product_name(version))
             assert from_release is not None, \
                 'No valid final version found in {}, {} as reference to create {}'.format(
                     self.instance_type, self.major_version, version
                 )
+
         new_release = from_release.create_release(version)
         self._releases[version] = new_release
+
+        if with_minor_version:
+            minor_version = to_minor_version(version)
+            if minor_version not in self._releases:
+                minor_release = new_release.create_release(minor_version)
+                minor_release.is_final = False
+                self._releases[minor_version] = minor_release
 
     def find_latest_final_release(self, product=None):
         """Find the latest release version.
@@ -204,31 +197,35 @@ class VersionedInstance(object):
         return latest_release
 
     def validate(self, release_meta):
-        if not self._is_third_party():
-            # Third-party images, ignored
-            self.validate_final_flag()
-            self.validate_hot_fix_ranges()
-            self.validate_tdc_not_dependent_on_other_product_lines()
-            self.validate_releases(release_meta)
+        """Validate properties and fix errors if possible
+        """
+        # Update min-max tdc version
+        # TODO: fixme
+        minv, maxv = release_meta.get_tdc_minmax_version()
+        self._min_tdc_version = minv
+        self._max_tdc_version = maxv
 
-    def _is_third_party(self):
-        # Third-party images without product name
-        # e.g., weblogic, nexus
-        sample = list(self._releases.values())[0]
-        product = product_name(sample.release_version)
-        if product is None:
-            return True
-        return False
+        for ver, release in self._releases.items():
+            release.validate_final_flag()
+            release.validate_tdc_minmax_version(self._min_tdc_version, self._max_tdc_version)
 
-    def validate_final_flag(self):
-        for r in self._releases.values():
-            # Validate is_final flag and version format
-            version = parse_version(r.release_version)
-            is_valid_final = True if version.suffix is not None else False
-            if r.is_final and not is_valid_final:
-                raise ValueError('The final version %s is illage' % r.release_version)
+        self.validate_hot_fix_ranges()
+        self.validate_tdc_not_dependent_on_other_product_lines()
+        self.validate_releases(release_meta)
 
     def validate_hot_fix_ranges(self):
+        """Validate release versions and hot-fix ranges.
+        Fix errors if possible
+        """
+        for release in self._releases.values():
+            v = release.release_version
+            try:
+                self._is_version_in_hot_fix_range(v)
+            except AssertionError as e:
+                print('Warning {}'.format(str(e)))
+                self.add_hot_fix_range(v, v)
+
+        # Merge continuous hot-fix ranges
         # Differentiate complete and minor-versioned-only versions
         complete_ranges = list()
         minor_versioned = list()
@@ -240,10 +237,10 @@ class VersionedInstance(object):
                 minor_versioned.append((minv, maxv))
             else:
                 complete_ranges.append((minv, maxv))
-        self._hot_fix_ranges = \
-            concatenate_vranges(complete_ranges) + concatenate_vranges(minor_versioned)
+        self._hot_fix_ranges = concatenate_vranges(complete_ranges) + \
+                               concatenate_vranges(minor_versioned)
 
-    def validate_version_in_hot_fix_range(self, version):
+    def _is_version_in_hot_fix_range(self, version):
         found = False
         for _min, _max in self._hot_fix_ranges:
             if FlexVersion.in_range(version, _min, _max):
@@ -377,7 +374,7 @@ class Release(object):
             self.image_version[img] = parse_version(ver)
 
         # Dependencies
-        self.dependencies = dict()   # {instance_type: (minv, maxv)}
+        self.dependencies = dict()  # {instance_type: (minv, maxv)}
         for dep in val.get('dependencies', list):
             instance_type = dep.get('type')
             _max_ver = parse_version(dep.get('max-version'))
@@ -431,3 +428,32 @@ class Release(object):
             elif is_minor_versioned:
                 new_release.dependencies[dep] = (to_minor_version(minv), to_minor_version(maxv))
         return new_release
+
+    def validate_tdc_minmax_version(self, minv, maxv):
+        """Validate the release version should fall into min-max tdc range.
+        """
+        if product_name(self.release_version) == VC.OEM_NAME \
+                and self.release_version.suffix is not None:
+            assert self.release_version.in_range(minv, maxv), \
+                'The release {} of "{}" should in min-max tdc versions'.format(
+                    self.release_version, self.instance_type
+                )
+
+    def is_third_party(self):
+        # Third-party images without product name
+        # e.g., weblogic, nexus
+        product = product_name(self.release_version)
+        if product is None and self.release_version.suffix is None:
+            return True
+        return False
+
+    def validate_final_flag(self):
+        """Validate is_final flag and version format
+        """
+        is_valid_final = False
+        if self.release_version.suffix is not None or self.is_third_party():
+            is_valid_final = True
+        if self.is_final and not is_valid_final:
+            raise ValueError('The final version {} of instance {} is illegal'.format(
+                self.release_version, self.instance_type
+            ))

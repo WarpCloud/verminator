@@ -36,13 +36,13 @@ class ProductReleaseMeta(object):
     def _load_releases(self, minor_versioned_only=False):
         """ Read releases meta info of product lines
         """
-        res = dict()  # {release_name: product: (minv, maxv)}
+        res = dict()  # {tdc_release_ver: product: (minv, maxv)}
 
         for r in self._raw_data.get('Releases', list()):
-            rname = parse_version(r.get('release_name'), minor_versioned_only)
+            tdcver = parse_version(r.get('release_name'), minor_versioned_only)
 
-            if rname not in res:
-                res[rname] = dict()
+            if tdcver not in res:
+                res[tdcver] = dict()
 
             products = r.get('products', list())
             for p in products:
@@ -55,16 +55,22 @@ class ProductReleaseMeta(object):
                     % (minv_name, maxv_name)
 
                 pname = product_name(minv)
-                if pname not in res[rname]:
-                    res[rname][pname] = (minv, maxv)
+                if pname not in res[tdcver]:
+                    res[tdcver][pname] = (minv, maxv)
                 else:
-                    vrange = res[rname][pname]
-                    res[rname][pname] = concatenate_vranges(
+                    vrange = res[tdcver][pname]
+                    res[tdcver][pname] = concatenate_vranges(
                         [vrange, (minv, maxv)],
                         hard_merging=minor_versioned_only
                     )[0]
 
         return res
+
+    def get_tdc_minmax_version(self):
+        tdc_versions = sorted(self._releases.keys(), key=cmp_to_key(
+            lambda x, y: FlexVersion.compares(x, y)
+        ))
+        return tdc_versions[0], tdc_versions[-1]
 
     def get_compatible_versions(self, version):
         """ Given a product line name and a specific version,
