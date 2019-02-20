@@ -81,7 +81,7 @@ class ProductReleaseMeta(object):
         version = parse_version(version)
         product = product_name(version)
 
-        minor_versioned_only = is_minor_versioned_only(version)
+        minor_versioned_only = is_minor_versioned(version)
         releases = self._minor_versioned_releases \
             if minor_versioned_only else self._releases
 

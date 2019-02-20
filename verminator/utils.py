@@ -67,7 +67,7 @@ def replace_product_name(version, newname, by=None):
     return version
 
 
-def is_minor_versioned_only(version):
+def is_minor_versioned(version):
     version = parse_version(version)
     return version.maintenance is None \
            and version.build is None \

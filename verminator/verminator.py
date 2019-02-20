@@ -199,12 +199,7 @@ class VersionedInstance(object):
     def validate(self, release_meta):
         """Validate properties and fix errors if possible
         """
-        # Update min-max tdc version
-        # TODO: fixme
-        minv, maxv = release_meta.get_tdc_minmax_version()
-        self._min_tdc_version = minv
-        self._max_tdc_version = maxv
-
+        self.validate_tdc_minmax_versions(release_meta)
         for ver, release in self._releases.items():
             release.validate_final_flag()
             release.validate_tdc_minmax_version(self._min_tdc_version, self._max_tdc_version)
@@ -212,6 +207,31 @@ class VersionedInstance(object):
         self.validate_hot_fix_ranges()
         self.validate_tdc_not_dependent_on_other_product_lines()
         self.validate_releases(release_meta)
+
+    def validate_tdc_minmax_versions(self, release_meta):
+        """Update min-max tdc version
+        """
+        minv, maxv = release_meta.get_tdc_minmax_version()
+        tdc_vranges = list()
+        for release in self.ordered_releases:
+            if release.is_third_party():
+                tdc_vranges.append((minv, maxv))
+                continue
+            if is_minor_versioned(release.release_version):
+                continue
+            cv = release_meta.get_compatible_versions(release.release_version)
+            vranges = cv.get(VC.OEM_NAME, list())
+            if len(vranges) > 0:
+                tdc_vranges += vranges
+            else:
+                tdc_vranges.append((minv, maxv))
+
+        self._min_tdc_version = sorted([i[0] for i in tdc_vranges], key=cmp_to_key(
+            lambda x, y: FlexVersion.compares(x, y)
+        ))[0]
+        self._max_tdc_version = sorted([i[1] for i in tdc_vranges], key=cmp_to_key(
+            lambda x, y: FlexVersion.compares(x, y)
+        ))[-1]
 
     def validate_hot_fix_ranges(self):
         """Validate release versions and hot-fix ranges.
@@ -230,8 +250,8 @@ class VersionedInstance(object):
         complete_ranges = list()
         minor_versioned = list()
         for minv, maxv in self._hot_fix_ranges:
-            im_minv = is_minor_versioned_only(minv)
-            im_maxv = is_minor_versioned_only(maxv)
+            im_minv = is_minor_versioned(minv)
+            im_maxv = is_minor_versioned(maxv)
             assert im_minv == im_maxv, 'Min and max should take the same form'
             if im_minv:
                 minor_versioned.append((minv, maxv))
@@ -267,7 +287,7 @@ class VersionedInstance(object):
             cv = releasemeta.get_compatible_versions(r.release_version)
 
             # Filter vrange by tdc min-max version
-            minor_versioned_only = is_minor_versioned_only(r.release_version)
+            minor_versioned_only = is_minor_versioned(r.release_version)
             minv = parse_version(self._min_tdc_version, minor_versioned_only)
             maxv = parse_version(self._max_tdc_version, minor_versioned_only)
 
@@ -410,22 +430,18 @@ class Release(object):
         """Clone a new versioned release with reference to self.
         """
         version = parse_version(version)
-        is_minor_versioned = is_minor_versioned_only(version)
-        # assert get_product_name(version) == get_product_name(self.release_version), \
-        #     'The reference version {} should be the same product: {}'.format(
-        #         self.release_version, version
-        #     )
+        is_minor_version = is_minor_versioned(version)
         new_release = copy.deepcopy(self)
         new_release.release_version = version
         for img, ver in new_release.image_version.items():
             if product_name(ver) == product_name(self.release_version):
                 new_release.image_version[img] = version
-            elif is_minor_versioned:
+            elif is_minor_version:
                 new_release.image_version[img] = to_minor_version(ver)
         for dep, (minv, maxv) in new_release.dependencies.items():
             if product_name(minv) == product_name(self.release_version):
                 new_release.dependencies[dep] = (version, version)
-            elif is_minor_versioned:
+            elif is_minor_version:
                 new_release.dependencies[dep] = (to_minor_version(minv), to_minor_version(maxv))
         return new_release
 
@@ -435,8 +451,9 @@ class Release(object):
         if product_name(self.release_version) == VC.OEM_NAME \
                 and self.release_version.suffix is not None:
             assert self.release_version.in_range(minv, maxv), \
-                'The release {} of "{}" should in min-max tdc versions'.format(
-                    self.release_version, self.instance_type
+                'The release {} of "{}" should in min-max tdc versions ({}, {})'.format(
+                    self.release_version, self.instance_type,
+                    minv, maxv
                 )
 
     def is_third_party(self):
