@@ -47,7 +47,7 @@ The most commonly used verminator commands are:
         print('Running version creation')
         _create_version(args.instance_folder, args.version, args.component)
         print('Running validation')
-        # _validate_instances(args.instance_folder)
+        _validate_instances(args.instance_folder)
 
     def createoem(self):
         parser = argparse.ArgumentParser(description='Create an OEM release')
@@ -58,7 +58,7 @@ The most commonly used verminator commands are:
         VerminatorConfig.OEM_NAME = args.oemname
         _create_oem(args.instance_folder, args.oemname)
         print('Running validation')
-        # _validate_instances(args.instance_folder)
+        _validate_instances(args.instance_folder)
 
 
 def _validate_instances(instance_folder, releasemeta=None, component=None):
@@ -135,11 +135,9 @@ def _create_version(instance_folder, version, component=None):
         for ver, ins in instance.versioned_instances.items():
             if ins.find_latest_final_release(product_name(version)):
                 has_version_for_product = True
-            print(instance.instance_type, ver, ins.find_latest_final_release(product_name(version)) is not None)
-
-        # if has_version_for_product:
-        #     instance.create_release(version)
-        # instance.dump()
+        if has_version_for_product:
+            instance.create_release(version)
+        instance.dump()
 
 
 if __name__ == '__main__':

@@ -41,10 +41,9 @@ class Instance(object):
             new_instance._hot_fix_ranges = list()
             new_instance._releases = dict()
             ref_release = latest_instance.find_latest_final_release(product_name(version))
-            new_instance.create_release(version, ref_release)
-            self.versioned_instances[short_version] = new_instance
-
-            self.instance_folder.joinpath(short_version).mkdir()
+            if ref_release is not None:
+                new_instance.create_release(version, ref_release)
+                self.versioned_instances[short_version] = new_instance
 
     def dump(self):
         for ver, ins in self.versioned_instances.items():
@@ -194,10 +193,11 @@ class VersionedInstance(object):
         latest_release = None
         for r in self.ordered_releases[::-1]:
             if r.is_final:
-                latest_release = r
                 if product and product_name(r.release_version) == product:
+                    latest_release = r
                     break  # found the latest final version with the same prefix
                 elif not product:
+                    latest_release = r
                     break
         return latest_release
 
