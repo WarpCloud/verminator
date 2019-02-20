@@ -13,6 +13,12 @@ class Instance(object):
         self.instance_type = instance_type
         self.versioned_instances = dict()  # {short_version: Instance}
 
+        for ver in self.instance_folder.iterdir():
+            image_file = ver.joinpath('images.yaml')
+            dat = yaml.load(open(image_file))
+            ins = VersionedInstance(**dat)
+            self.add_versioned_instance(ver.name, ins)
+
     def add_versioned_instance(self, short_version, instance):
         assert short_version not in self.versioned_instances, \
             'Duplicated version %s for instance %s' % (short_version, self.instance_type)
@@ -28,9 +34,28 @@ class Instance(object):
         if short_version in self.versioned_instances:
             self.versioned_instances[short_version].create_release(version)
         else:
+            latest_short_version = sorted(self.versioned_instances.keys(), reverse=True)[0]
+            latest_instance = self.versioned_instances[latest_short_version]
+            new_instance = copy.deepcopy(latest_instance)
+            new_instance.major_version = short_version
+            new_instance._hot_fix_ranges = list()
+            new_instance._releases = dict()
+            ref_release = latest_instance.find_latest_final_release(product_name(version))
+            new_instance.create_release(version, ref_release)
+            self.versioned_instances[short_version] = new_instance
+
             self.instance_folder.joinpath(short_version).mkdir()
 
-            # Create a standalone release file
+    def dump(self):
+        for ver, ins in self.versioned_instances.items():
+            version_folder = self.instance_folder.joinpath(ver)
+            if not version_folder.exists():
+                version_folder.mkdir(parents=True)
+            image_file = version_folder.joinpath('images.yaml')
+            yaml_str = ins.to_yaml()
+            if yaml_str:
+                with open(image_file, 'w') as of:
+                    of.write(yaml_str)
 
 
 class VersionedInstance(object):
@@ -130,7 +155,7 @@ class VersionedInstance(object):
                     image_name, self.instance_type)
 
         # Validate the release version should fall into min-max tdc range
-        if get_product_name(r.release_version) == VC.OEM_NAME \
+        if product_name(r.release_version) == VC.OEM_NAME \
                 and r.release_version.suffix is not None:
             assert r.release_version.in_range(
                 self._min_tdc_version, self._max_tdc_version
@@ -147,14 +172,34 @@ class VersionedInstance(object):
         release_version = parse_version(release_version)
         return self._releases.get(release_version, default)
 
-    def create_release(self, version):
+    def create_release(self, version, from_release=None):
         """Create a new release version
         """
-        latest_version = None
+        version = parse_version(version)
+        assert version not in self._releases, 'Duplicated new version {} for {} {}'.format(
+            version, self.instance_type, self.major_version
+        )
+        if from_release is None:
+            from_release = self.find_latest_final_release(product_name(version))
+            assert from_release is not None, \
+                'No valid final version found in {}, {} as reference to create {}'.format(
+                    self.instance_type, self.major_version, version
+                )
+        new_release = from_release.create_release(version)
+        self._releases[version] = new_release
+
+    def find_latest_final_release(self, product=None):
+        """Find the latest release version.
+        """
+        latest_release = None
         for r in self.ordered_releases[::-1]:
-            if r.release_version.suffix is not None:
-                latest_version = r
-                break
+            if r.is_final:
+                latest_release = r
+                if product and product_name(r.release_version) == product:
+                    break  # found the latest final version with the same prefix
+                elif not product:
+                    break
+        return latest_release
 
     def validate(self, release_meta):
         if not self._is_third_party():
@@ -168,7 +213,7 @@ class VersionedInstance(object):
         # Third-party images without product name
         # e.g., weblogic, nexus
         sample = list(self._releases.values())[0]
-        product = get_product_name(sample.release_version)
+        product = product_name(sample.release_version)
         if product is None:
             return True
         return False
@@ -208,10 +253,10 @@ class VersionedInstance(object):
 
     def _validate_tdc_not_dependent_on_other_product_lines(self):
         for release in self._releases.values():
-            product = get_product_name(release.release_version)
+            product = product_name(release.release_version)
             if product == VC.OEM_NAME:
                 for dep, (minv, maxv) in release.dependencies.items():
-                    if get_product_name(minv) != product:
+                    if product_name(minv) != product:
                         print('Warning: TDC should be independent product, instance "{}", {}, dep "{}"'
                               .format(release.instance_type, release.release_version, dep))
 
@@ -227,7 +272,7 @@ class VersionedInstance(object):
             minv = parse_version(self._min_tdc_version, minor_versioned_only)
             maxv = parse_version(self._max_tdc_version, minor_versioned_only)
 
-            if get_product_name(r.release_version) == VC.OEM_NAME:
+            if product_name(r.release_version) == VC.OEM_NAME:
                 for pname in cv:
                     filtered = list()
                     for v in cv[pname]:
@@ -242,7 +287,7 @@ class VersionedInstance(object):
 
             # Validate the dependency versions
             for instance, vrange in r.dependencies.items():
-                product = get_product_name(vrange[0])
+                product = product_name(vrange[0])
                 if product in cv:
                     if len(cv[product]) == 0:
                         raise ValueError(
@@ -325,12 +370,12 @@ class Release(object):
         self.is_final = val.get('final', False)
 
         # Images
-        self.image_version = dict()
+        self.image_version = dict()  # {image_var: version}
         for img, ver in val.get('image-version', dict()).items():
             self.image_version[img] = parse_version(ver)
 
         # Dependencies
-        self.dependencies = dict()  # {instance_type: (minv, maxv)}
+        self.dependencies = dict()   # {instance_type: (minv, maxv)}
         for dep in val.get('dependencies', list):
             instance_type = dep.get('type')
             _max_ver = parse_version(dep.get('max-version'))
@@ -361,3 +406,26 @@ class Release(object):
                 replace_product_name(maxv, oemname, by)
             )
         return self
+
+    def create_release(self, version):
+        """Clone a new versioned release with reference to self.
+        """
+        version = parse_version(version)
+        is_minor_versioned = is_minor_versioned_only(version)
+        # assert get_product_name(version) == get_product_name(self.release_version), \
+        #     'The reference version {} should be the same product: {}'.format(
+        #         self.release_version, version
+        #     )
+        new_release = copy.deepcopy(self)
+        new_release.release_version = version
+        for img, ver in new_release.image_version.items():
+            if product_name(ver) == product_name(self.release_version):
+                new_release.image_version[img] = version
+            elif is_minor_versioned:
+                new_release.image_version[img] = to_minor_version(ver)
+        for dep, (minv, maxv) in new_release.dependencies.items():
+            if product_name(minv) == product_name(self.release_version):
+                new_release.dependencies[dep] = (version, version)
+            elif is_minor_versioned:
+                new_release.dependencies[dep] = (to_minor_version(minv), to_minor_version(maxv))
+        return new_release

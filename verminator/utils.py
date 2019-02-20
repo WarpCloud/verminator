@@ -53,7 +53,7 @@ def parse_version(version, minor_versioned_only=False):
     return version
 
 
-def get_product_name(version):
+def product_name(version):
     version = parse_version(version)
     return version.prefix
 
@@ -75,11 +75,20 @@ def is_minor_versioned_only(version):
            and version.suffix_version is None
 
 
+def to_minor_version(version):
+    version = parse_version(version)
+    version.maintenance = None
+    version.build  = None
+    version.suffix = None
+    version.suffix_version = None
+    return version
+
+
 def filter_vrange(this, other):
     cmin, cmax = this
     omin, omax = other
 
-    if get_product_name(cmin) == get_product_name(omin):
+    if product_name(cmin) == product_name(omin):
         if omin is not None:
             cmin = cmin if omin <= cmin else omin if omin < cmax else None
         if omax is not None:

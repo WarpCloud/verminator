@@ -48,13 +48,13 @@ class ProductReleaseMeta(object):
             for p in products:
                 minv = parse_version(p.get('min'), minor_versioned_only)
                 maxv = parse_version(p.get('max'), minor_versioned_only)
-                minv_name = get_product_name(minv)
-                maxv_name = get_product_name(maxv)
+                minv_name = product_name(minv)
+                maxv_name = product_name(maxv)
                 assert minv_name == maxv_name, \
                     'Product version should have the same prefix name: %s vs. %s' \
                     % (minv_name, maxv_name)
 
-                pname = get_product_name(minv)
+                pname = product_name(minv)
                 if pname not in res[rname]:
                     res[rname][pname] = (minv, maxv)
                 else:
@@ -73,7 +73,7 @@ class ProductReleaseMeta(object):
         res = dict()  # {product: [(minv, maxv), (minv, maxv)]}
 
         version = parse_version(version)
-        product = get_product_name(version)
+        product = product_name(version)
 
         minor_versioned_only = is_minor_versioned_only(version)
         releases = self._minor_versioned_releases \

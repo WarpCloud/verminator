@@ -40,26 +40,14 @@ The most commonly used verminator commands are:
 
     def createversion(self):
         parser = argparse.ArgumentParser(description='Create a new release version')
-        parser.add_argument('-p', '--product', help='''
-a new version for product line, with value like "sophon-2.2.0-final" 
-or "sophon-1.3.0-final >>> sophon-2.2.0-final".
-''')
-        parser.add_argument('-c', '--component', help='''
-a new version for a component with value like "redis=3.1.0"
-or "inceptor=transwarp-5.2.3-final"
-or "redis=3.1.0 >>> redis=4.0.0"
-or "inceptor=transwarp-5.2 >>> inceptor=transwarp-6.0.1-final"
-''')
+        parser.add_argument('-v', '--version', required=True, help='a new version for product line')
+        parser.add_argument('-c', '--component', help='a specific instance to validate')
         parser.add_argument('instance_folder', help='the instances folder of images definition')
         args = parser.parse_args(sys.argv[2:])
-        if args.product is None and args.component is None:
-            print('Error: -p or -c is required')
-            parser.print_usage()
-            sys.exit(-1)
         print('Running version creation')
-        _create_version(args.instance_folder, args.product, args.component)
+        _create_version(args.instance_folder, args.version, args.component)
         print('Running validation')
-        _validate_instances(args.instance_folder)
+        # _validate_instances(args.instance_folder)
 
     def createoem(self):
         parser = argparse.ArgumentParser(description='Create an OEM release')
@@ -70,7 +58,7 @@ or "inceptor=transwarp-5.2 >>> inceptor=transwarp-6.0.1-final"
         VerminatorConfig.OEM_NAME = args.oemname
         _create_oem(args.instance_folder, args.oemname)
         print('Running validation')
-        _validate_instances(args.instance_folder)
+        # _validate_instances(args.instance_folder)
 
 
 def _validate_instances(instance_folder, releasemeta=None, component=None):
@@ -136,13 +124,22 @@ def _create_oem(instance_folder, oemname):
                 of.write(yaml_str)
 
 
-def _create_version(instance_folder, product=None, component=None):
+def _create_version(instance_folder, version, component=None):
     p = Path(instance_folder)
     assert p.is_dir()
-    for instance in p.iterdir():
-        if not instance.is_dir():
+    for instance_path in p.iterdir():
+        if not instance_path.is_dir():
             continue
+        instance = Instance(instance_path.name, instance_path)
+        has_version_for_product = False
+        for ver, ins in instance.versioned_instances.items():
+            if ins.find_latest_final_release(product_name(version)):
+                has_version_for_product = True
+            print(instance.instance_type, ver, ins.find_latest_final_release(product_name(version)) is not None)
 
+        # if has_version_for_product:
+        #     instance.create_release(version)
+        # instance.dump()
 
 
 if __name__ == '__main__':
