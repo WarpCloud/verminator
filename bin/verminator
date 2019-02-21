@@ -32,34 +32,40 @@ The most commonly used verminator commands are:
             description='Validate existing image versions and fix errors automatically')
         parser.add_argument('-c', '--component', help='a specific instance to validate')
         parser.add_argument('--releasemeta', help='the releases_meta.yml file')
+        parser.add_argument('--nodump', action='store_false', help='if dumpping update')
         parser.add_argument('instance_folder', help='the instances folder of images definition')
         args = parser.parse_args(sys.argv[2:])
+        dump = not args.nodump
         print('Running validation, instance_folder=%s, releasemeta=%s' % \
               (args.instance_folder, args.releasemeta))
-        _validate_instances(args.instance_folder, args.releasemeta, args.component)
+        _validate_instances(args.instance_folder, args.releasemeta, args.component, dump=dump)
 
     def createversion(self):
         parser = argparse.ArgumentParser(description='Create a new release version')
         parser.add_argument('-v', '--version', required=True, help='a new version for product line')
+        parser.add_argument('--nodump', action='store_false', help='if dumpping update')
         parser.add_argument('instance_folder', help='the instances folder of images definition')
         args = parser.parse_args(sys.argv[2:])
+        dump = not args.nodump
         print('Running version creation')
-        _create_version(args.instance_folder, args.version)
+        _create_version(args.instance_folder, args.version, dump=dump)
         print('Running validation')
-        _validate_instances(args.instance_folder)
+        _validate_instances(args.instance_folder, dump=dump)
 
     def createoem(self):
         parser = argparse.ArgumentParser(description='Create an OEM release')
         parser.add_argument('-o', '--oemname', required=True, help='an oem name')
+        parser.add_argument('--nodump', action='store_false', help='if dumpping update')
         parser.add_argument('instance_folder', help='the instances folder of images definition')
         args = parser.parse_args(sys.argv[2:])
+        dump = not args.nodump
         print('Running OEM creation, oemname=%s' % args.oemname)
-        _create_oem(args.instance_folder, args.oemname)
+        _create_oem(args.instance_folder, args.oemname, dump=dump)
         print('Running validation')
-        _validate_instances(args.instance_folder)
+        _validate_instances(args.instance_folder, dump=dump)
 
 
-def _validate_instances(instance_folder, releasemeta=None, component=None):
+def _validate_instances(instance_folder, releasemeta=None, component=None, dump=True):
     p = Path(instance_folder)
     assert p.is_dir()
 
@@ -85,13 +91,15 @@ def _validate_instances(instance_folder, releasemeta=None, component=None):
         for ver, versioned_ins in instance.versioned_instances.items():
             print(instance_path.joinpath(ver))
             versioned_ins.validate(meta)
-        instance.dump()
+
+        if not dump:
+            instance.dump()
 
     if component is not None and not component_found:
         print('Warning: component %s not found in folder %s' % (component, instance_folder))
 
 
-def _create_oem(instance_folder, oemname):
+def _create_oem(instance_folder, oemname, dump=True):
     VerminatorConfig.OEM_NAME = args.oemname
 
     p = Path(instance_folder)
@@ -104,10 +112,11 @@ def _create_oem(instance_folder, oemname):
         for ver, versioned_ins in instance.versioned_instances.items():
             print(instance_path.joinpath(ver))
             versioned_ins.convert_oem()
-        instance.dump()
+        if not dump:
+            instance.dump()
 
 
-def _create_version(instance_folder, version, component=None):
+def _create_version(instance_folder, version, component=None, dump=True):
     product = product_name(version)
     p = Path(instance_folder)
     assert p.is_dir()
@@ -122,9 +131,11 @@ def _create_version(instance_folder, version, component=None):
                 has_version_for_product = True
 
         if has_version_for_product:
+            print('Creating release {} for {}'.format(version, instance.instance_type))
             instance.create_release(version)
 
-        instance.dump()
+        if not dump:
+            instance.dump()
 
 
 if __name__ == '__main__':

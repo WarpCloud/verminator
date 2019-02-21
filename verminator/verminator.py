@@ -9,8 +9,8 @@ __all__ = ['Instance', 'VersionedInstance', 'Release']
 
 class Instance(object):
     def __init__(self, instance_type, instance_folder):
-        self.instance_folder = Path(instance_folder)
         self.instance_type = instance_type
+        self.instance_folder = Path(instance_folder)
         self.versioned_instances = dict()  # {short_version: Instance}
 
         for ver in self.instance_folder.iterdir():
@@ -34,16 +34,28 @@ class Instance(object):
         if short_version in self.versioned_instances:
             self.versioned_instances[short_version].create_release(version, None, True)
         else:
-            latest_short_version = sorted(self.versioned_instances.keys(), reverse=True)[0]
-            latest_instance = self.versioned_instances[latest_short_version]
-            new_instance = copy.deepcopy(latest_instance)
+            ref_instance = None
+            ref_release = None
+            for ver in sorted(self.versioned_instances.keys(), reverse=True):
+                ins = self.versioned_instances[ver]
+                latest_r = ins.find_latest_final_release(product_name(version))
+                if latest_r is not None:
+                    ref_release = latest_r
+                    ref_instance = ins
+                if ref_instance is not None:
+                    break
+
+            if ref_instance is None:
+                raise ValueError('No valid final reference release found for creating {} of {}'.format(
+                    version, ref_instance.instance_type
+                ))
+
+            new_instance = copy.deepcopy(ref_instance)
             new_instance.major_version = short_version
             new_instance._hot_fix_ranges = list()
             new_instance._releases = dict()
-            ref_release = latest_instance.find_latest_final_release(product_name(version))
-            if ref_release is not None:
-                new_instance.create_release(version, ref_release, True)
-                self.versioned_instances[short_version] = new_instance
+            new_instance.create_release(version, ref_release, True)
+            self.versioned_instances[short_version] = new_instance
 
     def dump(self):
         for ver, ins in self.versioned_instances.items():
@@ -188,12 +200,13 @@ class VersionedInstance(object):
         latest_release = None
         for r in self.ordered_releases[::-1]:
             if r.is_final:
-                if product and product_name(r.release_version) == product:
-                    latest_release = r
-                    break  # found the latest final version with the same prefix
-                elif not product:
-                    latest_release = r
-                    break
+                rp = product_name(r.release_version)
+                if not product:
+                    latest_release = r if not rp else None
+                else:
+                    latest_release = r if product == rp else None
+            if latest_release is not None:
+                break
         return latest_release
 
     def validate(self, release_meta):
