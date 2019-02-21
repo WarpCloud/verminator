@@ -41,11 +41,10 @@ The most commonly used verminator commands are:
     def createversion(self):
         parser = argparse.ArgumentParser(description='Create a new release version')
         parser.add_argument('-v', '--version', required=True, help='a new version for product line')
-        parser.add_argument('-c', '--component', help='a specific instance to validate')
         parser.add_argument('instance_folder', help='the instances folder of images definition')
         args = parser.parse_args(sys.argv[2:])
         print('Running version creation')
-        _create_version(args.instance_folder, args.version, args.component)
+        _create_version(args.instance_folder, args.version)
         print('Running validation')
         _validate_instances(args.instance_folder)
 
@@ -55,7 +54,6 @@ The most commonly used verminator commands are:
         parser.add_argument('instance_folder', help='the instances folder of images definition')
         args = parser.parse_args(sys.argv[2:])
         print('Running OEM creation, oemname=%s' % args.oemname)
-        VerminatorConfig.OEM_NAME = args.oemname
         _create_oem(args.instance_folder, args.oemname)
         print('Running validation')
         _validate_instances(args.instance_folder)
@@ -70,12 +68,11 @@ def _validate_instances(instance_folder, releasemeta=None, component=None):
     else:
         releasemeta = p.joinpath('releases_meta.yaml')
     assert releasemeta.is_file()
-
     meta = ProductReleaseMeta(releasemeta)
 
     component_found = False
-    for instance in p.iterdir():
-        if not instance.is_dir():
+    for instance_path in p.iterdir():
+        if not instance_path.is_dir():
             continue
 
         if component is not None:
@@ -84,44 +81,30 @@ def _validate_instances(instance_folder, releasemeta=None, component=None):
             else:
                 component_found = True
 
-        for ver in instance.iterdir():
-            image_file = ver.joinpath('images.yaml')
-
-            print(image_file)
-
-            dat = yaml.load(open(image_file))
-            ins = VersionedInstance(**dat)
-            ins.validate(meta)
-
-            yaml_str = ins.to_yaml()
-            if yaml_str:
-                with open(image_file, 'w') as of:
-                    of.write(yaml_str)
-            else:
-                print(yaml_str)
+        instance = Instance(instance_path.name, instance_path)
+        for ver, versioned_ins in instance.versioned_instances.items():
+            print(instance_path.joinpath(ver))
+            versioned_ins.validate(meta)
+        instance.dump()
 
     if component is not None and not component_found:
         print('Warning: component %s not found in folder %s' % (component, instance_folder))
 
 
 def _create_oem(instance_folder, oemname):
+    VerminatorConfig.OEM_NAME = args.oemname
+
     p = Path(instance_folder)
     assert p.is_dir()
-    for instance in p.iterdir():
-        if not instance.is_dir():
+
+    for instance_path in p.iterdir():
+        if not instance_path.is_dir():
             continue
-        for ver in instance.iterdir():
-            image_file = ver.joinpath('images.yaml')
-
-            print(image_file)
-
-            dat = yaml.load(open(image_file))
-            ins = VersionedInstance(**dat)
-            ins.convert_oem()
-
-            yaml_str = ins.to_yaml()
-            with open(image_file, 'w') as of:
-                of.write(yaml_str)
+        instance = Instance(instance_path.name, instance_path)
+        for ver, versioned_ins in instance.versioned_instances.items():
+            print(instance_path.joinpath(ver))
+            versioned_ins.convert_oem()
+        instance.dump()
 
 
 def _create_version(instance_folder, version, component=None):
