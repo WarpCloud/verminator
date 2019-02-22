@@ -80,13 +80,11 @@ def _validate_instances(instance_folder, releasemeta=None, component=None, dump=
     for instance_path in p.iterdir():
         if not instance_path.is_dir():
             continue
-
         if component is not None:
-            if instance.name != component:
+            if instance_path.name != component:
                 continue
             else:
                 component_found = True
-
         instance = Instance(instance_path.name, instance_path)
         for ver, versioned_ins in instance.versioned_instances.items():
             print(instance_path.joinpath(ver))
