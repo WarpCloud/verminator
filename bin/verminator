@@ -98,7 +98,7 @@ def _validate_instances(instance_folder, releasemeta=None, component=None, dump=
 
 
 def _create_oem(instance_folder, oemname, dump=True):
-    VerminatorConfig.OEM_NAME = args.oemname
+    VerminatorConfig.OEM_NAME = oemname
 
     p = Path(instance_folder)
     assert p.is_dir()
