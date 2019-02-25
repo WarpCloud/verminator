@@ -239,12 +239,17 @@ class VersionedInstance(object):
             else:
                 tdc_vranges.append((minv, maxv))
 
-        self._min_tdc_version = sorted([i[0] for i in tdc_vranges], key=cmp_to_key(
-            lambda x, y: FlexVersion.compares(x, y)
-        ))[0]
-        self._max_tdc_version = sorted([i[1] for i in tdc_vranges], key=cmp_to_key(
-            lambda x, y: FlexVersion.compares(x, y)
-        ))[-1]
+        try:
+            self._min_tdc_version = sorted([i[0] for i in tdc_vranges], key=cmp_to_key(
+                lambda x, y: FlexVersion.compares(x, y)
+            ))[0]
+            self._max_tdc_version = sorted([i[1] for i in tdc_vranges], key=cmp_to_key(
+                lambda x, y: FlexVersion.compares(x, y)
+            ))[-1]
+        except IndexError:
+            raise ValueError('at least one final version is required for {}, {}'.format(
+                self.instance_type, self.major_version)
+            )
 
     def validate_hot_fix_ranges(self):
         """Validate release versions and hot-fix ranges.
