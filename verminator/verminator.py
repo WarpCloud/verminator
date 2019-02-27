@@ -53,7 +53,7 @@ class Instance(object):
             ref_release = None
             for ver_num in sorted(self.versioned_instances.keys(), reverse=True):
                 ins = self.versioned_instances[ver_num]
-                latest_r = ins.find_latest_final_release(product_name(version))
+                latest_r = ins.find_latest_release(product_name(version))
                 if latest_r is not None:
                     ref_release = latest_r
                     ref_instance = ins
@@ -213,12 +213,13 @@ class VersionedInstance(object):
         """Create a new release with version from @from_release or
         """
         version = parse_version(version)
-        assert version not in self._releases, 'Duplicated new version {} for {} {}'.format(
-            version, self.instance_type, self.major_version
-        )
+        if version in self._releases:
+            print('Warning: Duplicated new version {} for {} {}'.format(
+                version, self.instance_type, self.major_version
+            ))
 
         if from_release is None:
-            from_release = self.find_latest_final_release(product_name(version))
+            from_release = self.find_latest_release(product_name(version))
             assert from_release is not None, \
                 'No valid final version found in {}, {} as reference to create {}'.format(
                     self.instance_type, self.major_version, version
@@ -234,17 +235,18 @@ class VersionedInstance(object):
                 minor_release.is_final = False
                 self._releases[major_version] = minor_release
 
-    def find_latest_final_release(self, product=None):
+    def find_latest_release(self, product=None, is_final=False):
         """Find the latest release by product name .
         """
         latest_release = None
         for r in self.ordered_releases[::-1]:
-            if r.is_final:
-                rp = product_name(r.release_version)
-                if product is not None:
-                    latest_release = r if product == rp else None
-                else:
-                    latest_release = r if not rp else None
+            if is_final and not r.is_final:
+                continue
+            rp = product_name(r.release_version)
+            if product is not None:
+                latest_release = r if rp == product else None
+            else:
+                latest_release = r if rp != product else None
             if latest_release is not None:
                 break
         return latest_release
@@ -252,7 +254,12 @@ class VersionedInstance(object):
     def validate(self, release_meta):
         """Validate properties and fix errors if possible
         """
-        self.validate_tdc_minmax_versions(release_meta)
+        # Update tdc min-max versions
+        minv, maxv = release_meta.get_tdc_version_range()
+        self._min_tdc_version = minv
+        self._max_tdc_version = maxv
+
+        # Validate each release
         for ver, release in self._releases.items():
             release.validate_final_flag()
             release.validate_tdc_minmax_version(self._min_tdc_version, self._max_tdc_version)
@@ -261,33 +268,34 @@ class VersionedInstance(object):
         self.validate_tdc_not_dependent_on_other_product_lines()
         self.validate_releases(release_meta)
 
-    def validate_tdc_minmax_versions(self, release_meta):
-        """Update min-max tdc version
-        """
-        minv, maxv = release_meta.get_tdc_minmax_version()
+    def update_tdc_minmax_version(self, release_meta):
+        global_range = release_meta.get_tdc_version_range()
         tdc_vranges = list()
         for release in self.ordered_releases:
-            if release.is_third_party():
-                tdc_vranges.append((minv, maxv))
-                continue
-            if is_major_version(release.release_version):
-                continue
-            cv = release_meta.get_compatible_versions(release.release_version)
-            vranges = cv.get(VC.OEM_NAME, list())
-            if len(vranges) > 0:
-                tdc_vranges += vranges
-            else:
-                tdc_vranges.append((minv, maxv))
 
-        try:
+            # The third party release (without version prefix) takes the global version range
+            if release.is_third_party():
+                tdc_vranges.append(global_range)
+                continue
+
+            # Otherwise get the precise compatible product version range
+            vrange = release_meta.get_tdc_version_range(release.release_version)
+            if vrange is not None:
+                tdc_vranges.append(vrange)
+            else:
+                print('Warning: not found a valid tdc version range for {}, {}. Use the global range instead'
+                      .format(release.instance_type, release.release_version))
+                tdc_vranges.append(global_range)
+
+        if len(tdc_vranges) > 0:
             self._min_tdc_version = sorted([i[0] for i in tdc_vranges], key=cmp_to_key(
                 lambda x, y: FlexVersion.compares(x, y)
             ))[0]
             self._max_tdc_version = sorted([i[1] for i in tdc_vranges], key=cmp_to_key(
                 lambda x, y: FlexVersion.compares(x, y)
             ))[-1]
-        except IndexError:
-            raise ValueError('at least one final version is required for {}, {}'.format(
+        else:
+            raise ValueError('At least a valid release is required for {}, {}'.format(
                 self.instance_type, self.major_version)
             )
 
@@ -513,6 +521,9 @@ class Release(object):
                     self.release_version, self.instance_type,
                     minv, maxv
                 )
+
+    def is_major_version(self):
+        return is_major_version(self.release_version)
 
     def is_third_party(self):
         # Third-party images without product name

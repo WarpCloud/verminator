@@ -10,8 +10,8 @@
 #   - {max: transwarp-5.1.0-final, min: transwarp-5.1.0-final}
 #   release_name: tdc-1.0.0-rc2
 # ************************
-from .utils import *
 from .config import VerminatorConfig as VC
+from .utils import *
 
 __all__ = ['ProductReleaseMeta']
 
@@ -22,7 +22,7 @@ class ProductReleaseMeta(object):
 
     def __init__(self, yaml_file):
         self._raw_data = yaml.load(open(yaml_file))
-        self._releases = self._load_releases()
+        self._releases = self._load_releases()  # {tdc_release_ver: product: (minv, maxv)}
         self._major_versioned_releases = self._load_releases(True)
 
     @property
@@ -36,7 +36,7 @@ class ProductReleaseMeta(object):
     def _load_releases(self, major_versioned=False):
         """ Read releases meta info of product lines
         """
-        res = dict()  # {tdc_release_ver: product: (minv, maxv)}
+        res = dict()
 
         for r in self._raw_data.get('Releases', list()):
             tdcver = parse_version(r.get('release_name'), major_versioned)
@@ -66,11 +66,39 @@ class ProductReleaseMeta(object):
 
         return res
 
-    def get_tdc_minmax_version(self):
-        tdc_versions = sorted(self._releases.keys(), key=cmp_to_key(
+    def get_tdc_version_range(self, version=None):
+        """Get the tdc (complete) version range given a specific
+        product version or None.
+        """
+        sorted_tdc_version = sorted(self._releases.keys(), key=cmp_to_key(
             lambda x, y: FlexVersion.compares(x, y)
         ))
-        return tdc_versions[0], tdc_versions[-1]
+        if version is None:
+            return sorted_tdc_version[0], sorted_tdc_version[-1]
+
+        # Get compatible tdc versions in a normalized way
+        version = parse_version(version)
+        cv = self.get_compatible_versions(version)
+        versions = list()  # [(minv, maxv), (minv, maxv)]
+        for v1, v2 in cv.get(VC.OEM_NAME, list()):
+            if is_major_version(v1):
+                minv, maxv = None, None
+                for v in sorted_tdc_version:
+                    if v1 == to_major_version(v):
+                        minv = v
+                for v in sorted_tdc_version[::-1]:
+                    if v2 == to_major_version(v):
+                        maxv = v
+                if None in (minv, maxv):
+                    raise ValueError('Can not get valid tdc version range for {}'.format(version))
+                versions.append((minv, maxv))
+            else:
+                versions.append((v1, v2))
+
+        if len(versions) > 0:
+            return versions[0][0], versions[-1][1]
+        else:
+            return None
 
     def get_compatible_versions(self, version):
         """ Given a product line name and a specific version,

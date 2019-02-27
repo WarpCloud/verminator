@@ -39,6 +39,9 @@ def ordered_yaml_dump(data, stream=None, Dumper=yaml.SafeDumper, **kwds):
 
 
 def parse_version(version, major_versioned=False):
+    if version is None:
+        return None
+
     if not isinstance(version, VersionMeta):
         version = FlexVersion.parse_version(version)
     else:
@@ -108,8 +111,9 @@ def concatenate_vranges(vranges, hard_merging=False):
             prefixes[prefix] = list()
         prefixes[prefix].append(vrange)
 
-    concatenated = [_concatenate_vranges_with_same_prefix(vranges, hard_merging) \
-                    for vranges in prefixes.values()]
+    concatenated = [_concatenate_vranges_with_same_prefix(
+        vranges, hard_merging) for vranges in prefixes.values()]
+
     return [y for x in concatenated for y in x]
 
 
