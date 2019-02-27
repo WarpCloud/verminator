@@ -115,7 +115,7 @@ class ProductReleaseMeta(object):
 
         if product == VC.OEM_NAME:
             if version not in releases:
-                raise ValueError('Version %s should be declared in releasemeta' % version)
+                raise ValueError('Version %s should be declared in releasemeta first' % version)
 
             products = releases[version]
             for pname, vrange in products.items():
