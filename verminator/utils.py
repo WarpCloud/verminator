@@ -38,13 +38,13 @@ def ordered_yaml_dump(data, stream=None, Dumper=yaml.SafeDumper, **kwds):
     return yaml.dump(data, stream, OrderedDumper, **kwds)
 
 
-def parse_version(version, minor_versioned_only=False):
+def parse_version(version, major_versioned=False):
     if not isinstance(version, VersionMeta):
         version = FlexVersion.parse_version(version)
     else:
         version = copy.deepcopy(version)
 
-    if minor_versioned_only:
+    if major_versioned:
         version.maintenance = None
         version.build = None
         version.suffix = None
@@ -67,7 +67,7 @@ def replace_product_name(version, newname, by=None):
     return version
 
 
-def is_minor_versioned(version):
+def is_major_version(version):
     version = parse_version(version)
     return version.maintenance is None \
            and version.build is None \
@@ -75,10 +75,10 @@ def is_minor_versioned(version):
            and version.suffix_version is None
 
 
-def to_minor_version(version):
+def to_major_version(version):
     version = parse_version(version)
     version.maintenance = None
-    version.build  = None
+    version.build = None
     version.suffix = None
     version.suffix_version = None
     return version

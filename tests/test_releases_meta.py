@@ -13,7 +13,7 @@ class ProductReleaseMetaCase(unittest.TestCase):
 
     def test_official(self):
         meta = ProductReleaseMeta(self.tdc_yml)
-        releases = [str(i) for i in meta.minor_versioned_releases.keys()]
+        releases = [str(i) for i in meta.major_versioned_releases.keys()]
         self.assertTrue('tdc-1.0' in releases)
         self.assertTrue('tdc-1.1' in releases)
         self.assertTrue('tdc-1.2' in releases)
@@ -21,7 +21,7 @@ class ProductReleaseMetaCase(unittest.TestCase):
 
     def test_oem(self):
         meta = ProductReleaseMeta(self.oem_yml)
-        releases = [str(i) for i in meta.minor_versioned_releases.keys()]
+        releases = [str(i) for i in meta.major_versioned_releases.keys()]
         self.assertTrue('gzes-1.0' in releases)
         self.assertTrue('gzes-1.1' in releases)
         self.assertTrue('gzes-1.2' in releases)

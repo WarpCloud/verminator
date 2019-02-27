@@ -11,7 +11,7 @@ class Instance(object):
     def __init__(self, instance_type, instance_folder):
         self.instance_type = instance_type
         self.instance_folder = Path(instance_folder)
-        self.versioned_instances = dict()  # {short_version: Instance}
+        self.versioned_instances = dict()  # {major_version_num: VersionedInstance}
 
         for ver in self.instance_folder.iterdir():
             image_file = ver.joinpath('images.yaml')
@@ -19,25 +19,40 @@ class Instance(object):
             ins = VersionedInstance(**dat)
             self.add_versioned_instance(ver.name, ins)
 
-    def add_versioned_instance(self, short_version, instance):
-        assert short_version not in self.versioned_instances, \
-            'Duplicated version %s for instance %s' % (short_version, self.instance_type)
-        self.versioned_instances[short_version] = instance
+    def add_versioned_instance(self, major_version_num, instance):
+        assert major_version_num not in self.versioned_instances, \
+            'Duplicated version %s for instance %s' % (major_version_num, self.instance_type)
+        self.versioned_instances[major_version_num] = instance
 
-    def get_versioned_instance(self, short_version):
-        return self.versioned_instances.get(short_version, None)
+    def get_versioned_instance(self, major_version_num):
+        return self.versioned_instances.get(major_version_num, None)
 
     def create_release(self, version):
-        version = parse_version(version)
-        short_version = '{}.{}'.format(version.major, version.minor)
+        """Create a new release and add to appropriate VersionedInstance.
 
-        if short_version in self.versioned_instances:
-            self.versioned_instances[short_version].create_release(version, None, True)
+        The version is preferentially added to VersionedInstance containing its
+        corresponding major version. Otherwise a new VersionedInstance created.
+        """
+        version = parse_version(version)
+        major_version_num = '{}.{}'.format(version.major, version.minor)
+
+        # Find VersionedInstance which contains the major version
+        ref_instance = None
+        if major_version_num in self.versioned_instances:
+            ref_instance = self.versioned_instances[major_version_num]
         else:
-            ref_instance = None
+            major_version = to_major_version(version)  # with prefix say tdc-2.0
+            for versioned_ins in self.versioned_instances.values():
+                if versioned_ins.has_release(major_version):
+                    ref_instance = versioned_ins
+                    break
+
+        if ref_instance is not None:
+            ref_instance.create_release(version, None, True)
+        else:
             ref_release = None
-            for ver in sorted(self.versioned_instances.keys(), reverse=True):
-                ins = self.versioned_instances[ver]
+            for ver_num in sorted(self.versioned_instances.keys(), reverse=True):
+                ins = self.versioned_instances[ver_num]
                 latest_r = ins.find_latest_final_release(product_name(version))
                 if latest_r is not None:
                     ref_release = latest_r
@@ -51,11 +66,11 @@ class Instance(object):
                 ))
 
             new_instance = copy.deepcopy(ref_instance)
-            new_instance.major_version = short_version
+            new_instance.major_version = major_version_num
             new_instance._hot_fix_ranges = list()
             new_instance._releases = dict()
             new_instance.create_release(version, ref_release, True)
-            self.versioned_instances[short_version] = new_instance
+            self.versioned_instances[major_version_num] = new_instance
 
     def dump(self):
         for ver, ins in self.versioned_instances.items():
@@ -75,6 +90,8 @@ class VersionedInstance(object):
 
     def __init__(self, **kwargs):
         self.instance_type = kwargs.get('instance-type')
+
+        # The major version corresponds to chart version in helm.
         self.major_version = parse_version(kwargs.get('major-version'))
 
         self._min_tdc_version = parse_version(
@@ -102,18 +119,27 @@ class VersionedInstance(object):
 
     @property
     def min_tdc_version(self):
+        """Get the """
+        assert not is_major_version(self._min_tdc_version), \
+            'The min tdc version should be a valid final version'
         return self._min_tdc_version
 
     @property
     def max_tdc_version(self):
+        assert not is_major_version(self._max_tdc_version), \
+            'The max tdc version should be a valid final version'
         return self._max_tdc_version
 
     @property
     def hot_fix_ranges(self):
+        """Get a list of hot-fix ranges in form [(minv, maxv)]
+        """
         return self._hot_fix_ranges
 
     @property
     def images(self):
+        """Get a dict of image variables and names
+        """
         return self._images.items()
 
     @property
@@ -132,6 +158,8 @@ class VersionedInstance(object):
         ))
 
     def add_hot_fix_range(self, _min, _max):
+        """Add a new hot-fix range to VersionedInstance from raw data.
+        """
         if isinstance(_min, str):
             _min = parse_version(_min)
         if isinstance(_max, str):
@@ -146,6 +174,8 @@ class VersionedInstance(object):
         self._hot_fix_ranges.append((_min, _max))
 
     def add_image(self, image_dat):
+        """Add a new image to VersionedInstance from raw data.
+        """
         name = image_dat.get('name')
         variable = image_dat.get('variable')
         if variable not in self._images:
@@ -157,6 +187,8 @@ class VersionedInstance(object):
                 ))
 
     def add_release(self, release_dat):
+        """Add a new release to VersionedInstance from raw data.
+        """
         r = Release(self.instance_type, release_dat)
         # Validate the image completeness
         for image_name in r.image_version:
@@ -166,11 +198,19 @@ class VersionedInstance(object):
         self._releases[r.release_version] = r
 
     def get_release(self, release_version, default=None):
+        """Get a release defined in the VersionedInstance
+        """
         release_version = parse_version(release_version)
         return self._releases.get(release_version, default)
 
-    def create_release(self, version, from_release=None, with_minor_version=False):
-        """Create a new release version
+    def has_release(self, release_version):
+        """Check if a specific version is defined in the VersionedInstance
+        """
+        release_version = parse_version(release_version)
+        return release_version in self._releases
+
+    def create_release(self, version, from_release=None, major_versioned=False):
+        """Create a new release with version from @from_release or
         """
         version = parse_version(version)
         assert version not in self._releases, 'Duplicated new version {} for {} {}'.format(
@@ -187,24 +227,24 @@ class VersionedInstance(object):
         new_release = from_release.create_release(version)
         self._releases[version] = new_release
 
-        if with_minor_version:
-            minor_version = to_minor_version(version)
-            if minor_version not in self._releases:
-                minor_release = new_release.create_release(minor_version)
+        if major_versioned:
+            major_version = to_major_version(version)
+            if major_version not in self._releases:
+                minor_release = new_release.create_release(major_version)
                 minor_release.is_final = False
-                self._releases[minor_version] = minor_release
+                self._releases[major_version] = minor_release
 
     def find_latest_final_release(self, product=None):
-        """Find the latest release version.
+        """Find the latest release by product name .
         """
         latest_release = None
         for r in self.ordered_releases[::-1]:
             if r.is_final:
                 rp = product_name(r.release_version)
-                if not product:
-                    latest_release = r if not rp else None
-                else:
+                if product is not None:
                     latest_release = r if product == rp else None
+                else:
+                    latest_release = r if not rp else None
             if latest_release is not None:
                 break
         return latest_release
@@ -230,7 +270,7 @@ class VersionedInstance(object):
             if release.is_third_party():
                 tdc_vranges.append((minv, maxv))
                 continue
-            if is_minor_versioned(release.release_version):
+            if is_major_version(release.release_version):
                 continue
             cv = release_meta.get_compatible_versions(release.release_version)
             vranges = cv.get(VC.OEM_NAME, list())
@@ -266,17 +306,17 @@ class VersionedInstance(object):
         # Merge continuous hot-fix ranges
         # Differentiate complete and minor-versioned-only versions
         complete_ranges = list()
-        minor_versioned = list()
+        major_versions = list()
         for minv, maxv in self._hot_fix_ranges:
-            im_minv = is_minor_versioned(minv)
-            im_maxv = is_minor_versioned(maxv)
+            im_minv = is_major_version(minv)
+            im_maxv = is_major_version(maxv)
             assert im_minv == im_maxv, 'Min and max should take the same form'
             if im_minv:
-                minor_versioned.append((minv, maxv))
+                major_versions.append((minv, maxv))
             else:
                 complete_ranges.append((minv, maxv))
         self._hot_fix_ranges = concatenate_vranges(complete_ranges) + \
-                               concatenate_vranges(minor_versioned)
+                               concatenate_vranges(major_versions)
 
     def _is_version_in_hot_fix_range(self, version):
         found = False
@@ -305,9 +345,9 @@ class VersionedInstance(object):
             cv = releasemeta.get_compatible_versions(r.release_version)
 
             # Filter vrange by tdc min-max version
-            minor_versioned_only = is_minor_versioned(r.release_version)
-            minv = parse_version(self._min_tdc_version, minor_versioned_only)
-            maxv = parse_version(self._max_tdc_version, minor_versioned_only)
+            _is_major_version = is_major_version(r.release_version)
+            minv = parse_version(self._min_tdc_version, _is_major_version)
+            maxv = parse_version(self._max_tdc_version, _is_major_version)
 
             if product_name(r.release_version) == VC.OEM_NAME:
                 for pname in cv:
@@ -448,19 +488,19 @@ class Release(object):
         """Clone a new versioned release with reference to self.
         """
         version = parse_version(version)
-        is_minor_version = is_minor_versioned(version)
+        _is_major_version = is_major_version(version)
         new_release = copy.deepcopy(self)
         new_release.release_version = version
         for img, ver in new_release.image_version.items():
             if product_name(ver) == product_name(self.release_version):
                 new_release.image_version[img] = version
-            elif is_minor_version:
-                new_release.image_version[img] = to_minor_version(ver)
+            elif _is_major_version:
+                new_release.image_version[img] = to_major_version(ver)
         for dep, (minv, maxv) in new_release.dependencies.items():
             if product_name(minv) == product_name(self.release_version):
                 new_release.dependencies[dep] = (version, version)
-            elif is_minor_version:
-                new_release.dependencies[dep] = (to_minor_version(minv), to_minor_version(maxv))
+            elif _is_major_version:
+                new_release.dependencies[dep] = (to_major_version(minv), to_major_version(maxv))
         return new_release
 
     def validate_tdc_minmax_version(self, minv, maxv):

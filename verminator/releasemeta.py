@@ -23,31 +23,31 @@ class ProductReleaseMeta(object):
     def __init__(self, yaml_file):
         self._raw_data = yaml.load(open(yaml_file))
         self._releases = self._load_releases()
-        self._minor_versioned_releases = self._load_releases(True)
+        self._major_versioned_releases = self._load_releases(True)
 
     @property
     def releases(self):
         return self._releases
 
     @property
-    def minor_versioned_releases(self):
-        return self._minor_versioned_releases
+    def major_versioned_releases(self):
+        return self._major_versioned_releases
 
-    def _load_releases(self, minor_versioned_only=False):
+    def _load_releases(self, major_versioned=False):
         """ Read releases meta info of product lines
         """
         res = dict()  # {tdc_release_ver: product: (minv, maxv)}
 
         for r in self._raw_data.get('Releases', list()):
-            tdcver = parse_version(r.get('release_name'), minor_versioned_only)
+            tdcver = parse_version(r.get('release_name'), major_versioned)
 
             if tdcver not in res:
                 res[tdcver] = dict()
 
             products = r.get('products', list())
             for p in products:
-                minv = parse_version(p.get('min'), minor_versioned_only)
-                maxv = parse_version(p.get('max'), minor_versioned_only)
+                minv = parse_version(p.get('min'), major_versioned)
+                maxv = parse_version(p.get('max'), major_versioned)
                 minv_name = product_name(minv)
                 maxv_name = product_name(maxv)
                 assert minv_name == maxv_name, \
@@ -61,7 +61,7 @@ class ProductReleaseMeta(object):
                     vrange = res[tdcver][pname]
                     res[tdcver][pname] = concatenate_vranges(
                         [vrange, (minv, maxv)],
-                        hard_merging=minor_versioned_only
+                        hard_merging=major_versioned
                     )[0]
 
         return res
@@ -81,9 +81,9 @@ class ProductReleaseMeta(object):
         version = parse_version(version)
         product = product_name(version)
 
-        minor_versioned_only = is_minor_versioned(version)
-        releases = self._minor_versioned_releases \
-            if minor_versioned_only else self._releases
+        _is_major_version = is_major_version(version)
+        releases = self._major_versioned_releases \
+            if _is_major_version else self._releases
 
         if product == VC.OEM_NAME:
             if version not in releases:
@@ -108,7 +108,7 @@ class ProductReleaseMeta(object):
                 # Remember TDC versions
                 res[VC.OEM_NAME] = concatenate_vranges(
                     res[VC.OEM_NAME] + [(rname, rname)],
-                    hard_merging=minor_versioned_only
+                    hard_merging=_is_major_version
                 )
 
                 # Extract other product versions
@@ -119,7 +119,7 @@ class ProductReleaseMeta(object):
                         res[pname] = list()
                     res[pname] = concatenate_vranges(
                         res[pname] + [vrange],
-                        hard_merging=minor_versioned_only
+                        hard_merging=_is_major_version
                     )
 
         # Remember the product per se
