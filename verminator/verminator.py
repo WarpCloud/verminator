@@ -255,9 +255,7 @@ class VersionedInstance(object):
         """Validate properties and fix errors if possible
         """
         # Update tdc min-max versions
-        minv, maxv = release_meta.get_tdc_version_range()
-        self._min_tdc_version = minv
-        self._max_tdc_version = maxv
+        self.update_tdc_minmax_version(release_meta)
 
         # Validate each release
         for ver, release in self._releases.items():
