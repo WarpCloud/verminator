@@ -109,7 +109,7 @@ class VersionedInstance(object):
         for item in kwargs.get('hot-fix-ranges', list):
             self.add_hot_fix_range(item.get('min'), item.get('max'))
 
-        self._images = dict()  # {var: name}
+        self._images = dict()  # {var: { name:name, role: role, roles: []}}
         for item in kwargs.get('images', dict()):
             self.add_image(item)
 
@@ -178,8 +178,15 @@ class VersionedInstance(object):
         """
         name = image_dat.get('name')
         variable = image_dat.get('variable')
+        role = image_dat.get('role', None)
+        roles = image_dat.get('roles', None)
         if variable not in self._images:
-            self._images[variable] = name
+            self._images[variable] = {
+                'name': name,
+                'variable': variable,
+                'role': role,
+                'roles': roles
+            }
         else:
             raise ValueError(
                 'Duplicated image variables definitions for %s %s' % (
@@ -407,8 +414,9 @@ class VersionedInstance(object):
             })
 
         res['images'] = list()
-        for var, name in self.images:
-            res['images'].append({'variable': var, 'name': name})
+        for var, data in self.images:
+            image_dat = {key: value for key, value in data.items() if value is not None}
+            res['images'].append(image_dat)
 
         res['releases'] = list()
         for r in self.ordered_releases:
