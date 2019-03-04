@@ -50,6 +50,7 @@ class Instance(object):
         if ref_instance is not None:
             ref_instance.create_release(version, None, True)
         else:
+            # Find the latest release with the same product as reference
             ref_release = None
             for ver_num in sorted(self.versioned_instances.keys(), reverse=True):
                 ins = self.versioned_instances[ver_num]
@@ -69,7 +70,7 @@ class Instance(object):
             new_instance.major_version = major_version_num
             new_instance._hot_fix_ranges = list()
             new_instance._releases = dict()
-            new_instance.create_release(version, ref_release, True)
+            new_instance.create_release(version, ref_release, with_major=True)
             self.versioned_instances[major_version_num] = new_instance
 
     def dump(self):
@@ -216,7 +217,7 @@ class VersionedInstance(object):
         release_version = parse_version(release_version)
         return release_version in self._releases
 
-    def create_release(self, version, from_release=None, major_versioned=False):
+    def create_release(self, version, from_release=None, with_major=False):
         """Create a new release with version from @from_release or
         """
         version = parse_version(version)
@@ -232,15 +233,18 @@ class VersionedInstance(object):
                     self.instance_type, self.major_version, version
                 )
 
-        new_release = from_release.create_release(version)
+        new_release = from_release.clone_as(version)
         self._releases[version] = new_release
 
-        if major_versioned:
+        if with_major:
             major_version = to_major_version(version)
             if major_version not in self._releases:
-                minor_release = new_release.create_release(major_version)
+                minor_release = new_release.clone_as(major_version)
                 minor_release.is_final = False
                 self._releases[major_version] = minor_release
+            else:
+                print('Duplicated major version {} for {}, {}'.format(
+                    major_version, self.instance_type, self.major_version))
 
     def find_latest_release(self, product=None, is_final=False):
         """Find the latest release by product name .
@@ -498,13 +502,14 @@ class Release(object):
             )
         return self
 
-    def create_release(self, version):
+    def clone_as(self, version):
         """Clone a new versioned release with reference to self.
         """
         version = parse_version(version)
         _is_major_version = is_major_version(version)
         new_release = copy.deepcopy(self)
         new_release.release_version = version
+        new_release.is_final = not _is_major_version
         for img, ver in new_release.image_version.items():
             if product_name(ver) == product_name(self.release_version):
                 new_release.image_version[img] = version
