@@ -431,16 +431,16 @@ class VersionedInstance(object):
         return ordered_yaml_dump(res, default_flow_style=False)
 
     def convert_oem(self):
-        self._min_tdc_version = replace_product_name(self._min_tdc_version, VC.OEM_NAME, VC.OFFICIAL_NAME)
-        self._max_tdc_version = replace_product_name(self._max_tdc_version, VC.OEM_NAME, VC.OFFICIAL_NAME)
+        self._min_tdc_version = replace_product_name(self._min_tdc_version, VC.OEM_NAME, VC._OEM_ORIGIN)
+        self._max_tdc_version = replace_product_name(self._max_tdc_version, VC.OEM_NAME, VC._OEM_ORIGIN)
         self._hot_fix_ranges = [
             (
-                replace_product_name(minv, VC.OEM_NAME, by=VC.OFFICIAL_NAME),
-                replace_product_name(maxv, VC.OEM_NAME, by=VC.OFFICIAL_NAME)
+                replace_product_name(minv, VC.OEM_NAME, by=VC._OEM_ORIGIN),
+                replace_product_name(maxv, VC.OEM_NAME, by=VC._OEM_ORIGIN)
             ) for minv, maxv in self._hot_fix_ranges
         ]
         for rver, release in self._releases.items():
-            self._releases[rver] = release.convert_oem(VC.OEM_NAME, VC.OFFICIAL_NAME)
+            self._releases[rver] = release.convert_oem(VC.OEM_NAME, VC._OEM_ORIGIN)
 
 
 class Release(object):
@@ -478,7 +478,7 @@ class Release(object):
             else:
                 self.dependencies[instance_type] = (_min_ver, _max_ver)
 
-    def convert_oem(self, oemname, by=VC.OFFICIAL_NAME):
+    def convert_oem(self, oemname, by=VC._OEM_ORIGIN):
         self.release_version = replace_product_name(self.release_version, oemname, by)
         for image_name, ver in self.image_version.items():
             self.image_version[image_name] = replace_product_name(ver, oemname, by)
