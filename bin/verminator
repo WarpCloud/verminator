@@ -31,7 +31,7 @@ The most commonly used verminator commands are:
         parser = argparse.ArgumentParser(
             description='Validate existing image versions and fix errors automatically')
         parser.add_argument('-c', '--component', help='a specific instance to validate')
-        parser.add_argument('-o', '--oemname', required=True, help='an oem name')
+        parser.add_argument('-o', '--oemname', help='an oem name')
         parser.add_argument('--releasemeta', help='the releases_meta.yml file')
         parser.add_argument('--nodump', action='store_false', help='if dumpping update')
         parser.add_argument('instance_folder', help='the instances folder of images definition')
@@ -51,7 +51,7 @@ The most commonly used verminator commands are:
         parser = argparse.ArgumentParser(description='Create a new release version')
         parser.add_argument('-v', '--version', required=True, help='a new version for product line')
         parser.add_argument('-c', '--component', help='a specific instance to validate')
-        parser.add_argument('-o', '--oemname', required=True, help='an oem name')
+        parser.add_argument('-o', '--oemname', help='an oem name')
         parser.add_argument('--releasemeta', help='the releases_meta.yml file')
         parser.add_argument('--nodump', action='store_false', help='if dumpping update')
         parser.add_argument('instance_folder', help='the instances folder of images definition')
@@ -103,19 +103,15 @@ The most commonly used verminator commands are:
 
 
 def _validate_instances(instance_folder, releasemeta=None, component=None, dump=True, oemname=None):
-    if not oemname:
-        VerminatorConfig.OEM_NAME = oemname
-
+    verminator_config.set_oem(oemname)
     p = Path(instance_folder)
     assert p.is_dir()
-
     if releasemeta is not None:
         releasemeta = Path(releasemeta)
     else:
         releasemeta = p.joinpath('releases_meta.yaml')
     assert releasemeta.is_file()
     meta = ProductReleaseMeta(releasemeta)
-
     component_found = False
     for instance_path in p.iterdir():
         if not instance_path.is_dir():
@@ -125,7 +121,6 @@ def _validate_instances(instance_folder, releasemeta=None, component=None, dump=
                 continue
             else:
                 component_found = True
-
         instance = Instance(instance_path.name, instance_path)
         for ver, versioned_ins in instance.versioned_instances.items():
             print(instance_path.joinpath(ver))
@@ -139,24 +134,19 @@ def _validate_instances(instance_folder, releasemeta=None, component=None, dump=
 
 
 def _create_version(instance_folder, version, component=None, dump=True, releasemeta=None, oemname=None):
-    if not oemname:
-        VerminatorConfig.OEM_NAME = oemname
-
+    verminator_config.set_oem(oemname)
     product = product_name(version)
     p = Path(instance_folder)
     assert p.is_dir()
-
     if releasemeta is not None:
         releasemeta = Path(releasemeta)
     else:
         releasemeta = p.joinpath('releases_meta.yaml')
     assert releasemeta.is_file()
     meta = ProductReleaseMeta(releasemeta)
-
     tdc_vrange = meta.get_tdc_version_range(version)
     if tdc_vrange is None:
         raise ValueError('Version %s should be declared in releasemeta first' % version)
-
     component_found = False
     for instance_path in p.iterdir():
         if not instance_path.is_dir():
@@ -166,7 +156,6 @@ def _create_version(instance_folder, version, component=None, dump=True, release
                 continue
             else:
                 component_found = True
-
         instance = Instance(instance_path.name, instance_path)
         has_version_for_product = False
         for ver, ins in instance.versioned_instances.items():
@@ -176,7 +165,6 @@ def _create_version(instance_folder, version, component=None, dump=True, release
         if has_version_for_product:
             print('Creating release {} for {}'.format(version, instance.instance_type))
             instance.create_release(version)
-
         if not dump:
             instance.dump()
 
@@ -185,7 +173,7 @@ def _create_version(instance_folder, version, component=None, dump=True, release
 
 
 def _create_oem(instance_folder, oemname, dump=True, releasemeta=None):
-    VerminatorConfig.OEM_NAME = oemname
+    verminator_config.set_oem(oemname)
     p = Path(instance_folder)
     assert p.is_dir()
     for instance_path in p.iterdir():

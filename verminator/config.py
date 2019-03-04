@@ -1,4 +1,4 @@
-__all__ = ['VerminatorConfig']
+__all__ = ['verminator_config']
 import os
 
 
@@ -18,4 +18,13 @@ class Singleton(SingletonMetaClass('SingletonMeta', (object,), {})):
 
 class VerminatorConfig(Singleton):
     _OEM_ORIGIN = 'tdc'
-    OEM_NAME = os.getenv('OEM_NAME') if os.getenv('OEM_NAME', '') else 'tdc'
+    OEM_NAME = 'tdc'
+
+    def set_oem(self, oemname):
+        if oemname is not None:
+            self.OEM_NAME = oemname
+        elif os.getenv('OEM_NAME', ''):
+            self.OEM_NAME = os.getenv('OEM_NAME')
+
+
+verminator_config = VerminatorConfig()

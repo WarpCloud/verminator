@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
-from .config import VerminatorConfig as VC
+from .config import verminator_config as VC
 from .utils import *
 
 __all__ = ['Instance', 'VersionedInstance', 'Release']

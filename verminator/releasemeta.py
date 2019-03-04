@@ -10,7 +10,7 @@
 #   - {max: transwarp-5.1.0-final, min: transwarp-5.1.0-final}
 #   release_name: tdc-1.0.0-rc2
 # ************************
-from .config import VerminatorConfig as VC
+from .config import verminator_config as VC
 from .utils import *
 
 __all__ = ['ProductReleaseMeta']
