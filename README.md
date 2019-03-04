@@ -43,3 +43,7 @@ For specific instance, say inceptor
 ```bash
 verminator genver -c inceptor -v transwarp-6.0.1-final /path/to/product-meta/instances
 ```
+
+### For OEM
+
+If you are working on an OEM branch, make sure env `export OEM_NAME=xxx` set or command option `-o xxx` is given on the subcommand like `validate` and `genver`.
