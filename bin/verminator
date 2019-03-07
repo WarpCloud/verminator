@@ -106,10 +106,6 @@ def _validate_instances(instance_folder, releasemeta=None, component=None, dump=
     verminator_config.set_oem(oemname)
     p = Path(instance_folder)
     assert p.is_dir()
-    print('Validating release dependencies (originally from product-meta testing')
-    from verminator.validate_release_dep import scan_instances, validate_dependence_versions
-    scan_instances(p)
-    validate_dependence_versions()
     print('Validating versioned instances against release meta')
     if releasemeta is not None:
         releasemeta = Path(releasemeta)
@@ -136,6 +132,11 @@ def _validate_instances(instance_folder, releasemeta=None, component=None, dump=
 
     if component is not None and not component_found:
         raise ValueError('Component %s not found in folder %s' % (component, instance_folder))
+
+    print('Validating release dependencies (originally from product-meta testing')
+    from verminator.validate_release_dep import scan_instances, validate_dependence_versions
+    scan_instances(p)
+    validate_dependence_versions()
 
 
 def _create_version(instance_folder, version, component=None, dump=True, releasemeta=None, oemname=None):
