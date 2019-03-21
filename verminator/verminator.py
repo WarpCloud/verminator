@@ -274,7 +274,7 @@ class VersionedInstance(object):
             release.validate_tdc_minmax_version(self._min_tdc_version, self._max_tdc_version)
 
         self.validate_hot_fix_ranges()
-        self.validate_tdc_not_dependent_on_other_product_lines()
+        # self.validate_tdc_not_dependent_on_other_product_lines() # Disable it for now
         self.validate_releases(release_meta)
 
     def update_tdc_minmax_version(self, release_meta):

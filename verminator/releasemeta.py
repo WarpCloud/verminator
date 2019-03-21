@@ -39,10 +39,9 @@ class ProductReleaseMeta(object):
         res = dict()
 
         for r in self._raw_data.get('Releases', list()):
-            tdcver = parse_version(r.get('release_name'), major_versioned)
-
-            if tdcver not in res:
-                res[tdcver] = dict()
+            release_ver = parse_version(r.get('release_name'), major_versioned)
+            if release_ver not in res:
+                res[release_ver] = {}
 
             products = r.get('products', list())
             for p in products:
@@ -55,11 +54,11 @@ class ProductReleaseMeta(object):
                     % (minv_name, maxv_name)
 
                 pname = product_name(minv)
-                if pname not in res[tdcver]:
-                    res[tdcver][pname] = (minv, maxv)
+                if pname not in res[release_ver]:
+                    res[release_ver][pname] = (minv, maxv)
                 else:
-                    vrange = res[tdcver][pname]
-                    res[tdcver][pname] = concatenate_vranges(
+                    vrange = res[release_ver][pname]
+                    res[release_ver][pname] = concatenate_vranges(
                         [vrange, (minv, maxv)],
                         hard_merging=major_versioned
                     )[0]
@@ -71,7 +70,7 @@ class ProductReleaseMeta(object):
         product version or None.
         """
         sorted_tdc_version = sorted(self._releases.keys(), key=cmp_to_key(
-            lambda x, y: FlexVersion.compares(x, y)
+            lambda x, y: x.compares(y)
         ))
         if version is None:
             return sorted_tdc_version[0], sorted_tdc_version[-1]
@@ -79,7 +78,7 @@ class ProductReleaseMeta(object):
         # Get compatible tdc versions in a normalized way
         version = parse_version(version)
         cv = self.get_compatible_versions(version)
-        versions = list()  # [(minv, maxv), (minv, maxv)]
+        versions = list()  # [(minv, maxv)]
         for v1, v2 in cv.get(VC.OEM_NAME, list()):
             if is_major_version(v1):
                 minv, maxv = None, None
@@ -104,53 +103,78 @@ class ProductReleaseMeta(object):
         """ Given a product line name and a specific version,
         return the compatible product version ranges.
         """
-        res = dict()  # {product: [(minv, maxv), (minv, maxv)]}
-
         version = parse_version(version)
         product = product_name(version)
 
+        # Check that the version is complete or in major form
         _is_major_version = is_major_version(version)
         releases = self._major_versioned_releases \
             if _is_major_version else self._releases
 
-        if product == VC.OEM_NAME:
-            if version not in releases:
-                raise ValueError('Version %s should be declared in releasemeta first' % version)
+        derived_constraints = {}  # {product: [(minv, maxv)]}
+        declared_constraints = {
+            product: [(version, version)]
+        }
 
-            products = releases[version]
-            for pname, vrange in products.items():
-                res[pname] = [vrange]
-        else:
-            res[VC.OEM_NAME] = list()
-            for rname, products in releases.items():
-
-                if product not in products:
-                    # Ignore release without target product
+        for r, products in releases.items():
+            rp = product_name(r)
+            if product != rp:
+                # Derived
+                if product not in products or \
+                        not version.in_range(products[product][0], products[product][1]):
                     continue
 
-                minv, maxv = products.get(product)
-                if not FlexVersion.in_range(version, minv, maxv):
-                    # Ignore release not containing target version
-                    continue
+                if rp not in derived_constraints:
+                    derived_constraints[rp] = list()
+                derived_constraints[rp].append((r, r))
 
-                # Remember TDC versions
-                res[VC.OEM_NAME] = concatenate_vranges(
-                    res[VC.OEM_NAME] + [(rname, rname)],
-                    hard_merging=_is_major_version
-                )
-
-                # Extract other product versions
-                for pname, vrange in products.items():
-                    if pname == product:
+                for p, vrange in products.items():
+                    if p == product:
                         continue
-                    if pname not in res:
-                        res[pname] = list()
-                    res[pname] = concatenate_vranges(
-                        res[pname] + [vrange],
-                        hard_merging=_is_major_version
-                    )
+                    if p not in derived_constraints:
+                        derived_constraints[p] = list()
+                    derived_constraints[p].append(vrange)
+            else:
+                # Declared maybe
+                if r == version:
+                    if rp not in declared_constraints:
+                        declared_constraints[rp] = list()
+                    declared_constraints[rp].append((r, r))
+                    for p, vrange in products.items():
+                        if p == product:
+                            continue
+                        if p not in declared_constraints:
+                            declared_constraints[p] = list()
+                        declared_constraints[p].append(vrange)
+                else:
+                    # Omit non-equal declared versions
+                    pass
 
-        # Remember the product per se
-        res[product] = [(version, version)]
+        # Merge the declared and derived
+        merged = dict()
+        keys = set(list(declared_constraints.keys()) + list(derived_constraints.keys()))
+        for k in keys:
+            declared = derived = None
+            if k in declared_constraints:
+                declared = concatenate_vranges(declared_constraints[k], hard_merging=_is_major_version)
+            if k in derived_constraints:
+                derived = concatenate_vranges(derived_constraints[k], hard_merging=_is_major_version)
 
-        return res
+            if derived is None and declared is None:
+                continue
+            elif derived is not None and declared is None:
+                merged[k] = derived
+            elif derived is None and declared is not None:
+                merged[k] = declared
+            else:
+                # Filter derived by declared
+                merged[k] = list()
+                for v in derived:
+                    for w in declared:
+                        f = filter_vrange(v, w)
+                        if f is not None:
+                            v = f
+                    if v is not None:
+                        merged[k].append(v)
+
+        return merged
