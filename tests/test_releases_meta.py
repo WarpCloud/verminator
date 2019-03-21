@@ -48,6 +48,9 @@ class ProductReleaseMetaCase(unittest.TestCase):
         pv = meta.get_tdc_version_range('sophonweb-2.1.0-final')
         self.assert_vrange_equal(pv, ('tdc-1.2.0-rc3', 'tdc-1.2.1-rc1'))
 
+        pv = meta.get_tdc_version_range()
+        self.assert_vrange_equal(pv, ('tdc-1.0.0-rc1', 'tdc-1.2.1-rc1'))
+
     def test_get_compatible_versions(self):
         meta = ProductReleaseMeta(self.tdc2ex_yml)
         pv = meta.get_compatible_versions('tdc-2.0.0-rc1')
@@ -92,3 +95,6 @@ class ProductReleaseMetaCase(unittest.TestCase):
 
         pv = meta.get_tdc_version_range('sophonweb-2.2.1-final')
         self.assert_vrange_equal(pv, ('tdc-2.0.0-rc3', 'tdc-2.0.0-rc3'))
+
+        pv = meta.get_tdc_version_range()
+        self.assert_vrange_equal(pv, ('tdc-2.0.0-rc0', 'tdc-2.0.0-rc3'))

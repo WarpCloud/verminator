@@ -70,7 +70,8 @@ class ProductReleaseMeta(object):
         """Get the tdc (complete) version range given a specific
         product version or None.
         """
-        sorted_tdc_version = sorted(self._releases.keys(), key=cmp_to_key(
+        tdc_versions = [i for i in self._releases.keys() if product_name(i) == VC.OEM_NAME]
+        sorted_tdc_version = sorted(tdc_versions, key=cmp_to_key(
             lambda x, y: x.compares(y)
         ))
         if version is None:

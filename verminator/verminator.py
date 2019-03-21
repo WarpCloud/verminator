@@ -102,7 +102,7 @@ class VersionedInstance(object):
         self._max_tdc_version = parse_version(
             kwargs.get('max-tdc-version', None))
 
-        if FlexVersion.compares(self._min_tdc_version, self._max_tdc_version) > 0:
+        if self._min_tdc_version.compares(self._max_tdc_version) > 0:
             raise ValueError('Invalid min-max tdc version range for %s %s' %
                              (self.instance_type, self.major_version))
 
@@ -154,8 +154,7 @@ class VersionedInstance(object):
         """ Get a list of ordered releases by versions.
         """
         return sorted(self._releases.values(), key=cmp_to_key(
-            lambda x, y: FlexVersion.compares(
-                x.release_version, y.release_version)
+            lambda x, y: x.release_version.compares(y.release_version)
         ))
 
     def add_hot_fix_range(self, _min, _max):
@@ -166,7 +165,7 @@ class VersionedInstance(object):
         if isinstance(_max, str):
             _max = parse_version(_max)
 
-        if FlexVersion.compares(_min, _max) > 0:
+        if _min.compares(_max) > 0:
             raise ValueError(
                 'Invalid hot fix range for %s %s' %
                 (self.instance_type, self.major_version)
@@ -274,14 +273,13 @@ class VersionedInstance(object):
             release.validate_tdc_minmax_version(self._min_tdc_version, self._max_tdc_version)
 
         self.validate_hot_fix_ranges()
-        # self.validate_tdc_not_dependent_on_other_product_lines() # Disable it for now
+        self.validate_tdc_not_dependent_on_other_product_lines() # Disable it for now
         self.validate_releases(release_meta)
 
     def update_tdc_minmax_version(self, release_meta):
         global_range = release_meta.get_tdc_version_range()
         tdc_vranges = list()
         for release in self.ordered_releases:
-
             # The third party release (without version prefix) takes the global version range
             if release.is_third_party():
                 tdc_vranges.append(global_range)
@@ -298,10 +296,10 @@ class VersionedInstance(object):
 
         if len(tdc_vranges) > 0:
             self._min_tdc_version = sorted([i[0] for i in tdc_vranges], key=cmp_to_key(
-                lambda x, y: FlexVersion.compares(x, y)
+                lambda x, y: x.compares(y)
             ))[0]
             self._max_tdc_version = sorted([i[1] for i in tdc_vranges], key=cmp_to_key(
-                lambda x, y: FlexVersion.compares(x, y)
+                lambda x, y: x.compares(y)
             ))[-1]
         else:
             raise ValueError('At least a valid release is required for {}, {}'.format(
@@ -338,7 +336,7 @@ class VersionedInstance(object):
     def _is_version_in_hot_fix_range(self, version):
         found = False
         for _min, _max in self._hot_fix_ranges:
-            if FlexVersion.in_range(version, _min, _max):
+            if version.in_range(_min, _max):
                 found = True
                 break
         assert found is True, \
@@ -476,7 +474,7 @@ class Release(object):
             _max_ver = parse_version(dep.get('max-version'))
             _min_ver = parse_version(dep.get('min-version'))
 
-            if FlexVersion.compares(_min_ver, _max_ver) > 0:
+            if _min_ver.compares(_max_ver) > 0:
                 raise ValueError('Invalid min-max version declaim for dependency of %s for %s %s'
                                  % (instance_type,
                                     self.instance_type,
