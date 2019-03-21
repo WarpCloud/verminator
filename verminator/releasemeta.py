@@ -21,7 +21,8 @@ class ProductReleaseMeta(object):
     """
 
     def __init__(self, yaml_file):
-        self._raw_data = yaml.load(open(yaml_file))
+        with open(yaml_file) as ifile:
+            self._raw_data = yaml.load(ifile)
         self._releases = self._load_releases()  # {tdc_release_ver: product: (minv, maxv)}
         self._major_versioned_releases = self._load_releases(True)
 
@@ -111,10 +112,10 @@ class ProductReleaseMeta(object):
         releases = self._major_versioned_releases \
             if _is_major_version else self._releases
 
-        derived_constraints = {}  # {product: [(minv, maxv)]}
-        declared_constraints = {
+        derived_constraints = {
             product: [(version, version)]
         }
+        declared_constraints = {}
 
         for r, products in releases.items():
             rp = product_name(r)
@@ -150,7 +151,11 @@ class ProductReleaseMeta(object):
                     # Omit non-equal declared versions
                     pass
 
-        # Merge the declared and derived
+        # Merge the declared and derived.
+        # In our algorithm, the declared releases represent the strong
+        # dependencies between product lines such as sophon against tdh.
+        # The derived represents the loose dependencies deduced from declared
+        # releases such as tdc against sophon.
         merged = dict()
         keys = set(list(declared_constraints.keys()) + list(derived_constraints.keys()))
         for k in keys:
