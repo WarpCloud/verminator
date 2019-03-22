@@ -281,7 +281,7 @@ class VersionedInstance(object):
         tdc_vranges = list()
         for release in self.ordered_releases:
             # The third party release (without version prefix) takes the global version range
-            if release.is_third_party():
+            if release.is_third_party() and global_range is not None:
                 tdc_vranges.append(global_range)
                 continue
 
@@ -292,7 +292,10 @@ class VersionedInstance(object):
             else:
                 print('Warning: not found a valid tdc version range for {}, {}. Use the global range instead'
                       .format(release.instance_type, release.release_version))
-                tdc_vranges.append(global_range)
+                if global_range is not None:
+                    tdc_vranges.append(global_range)
+
+        print(tdc_vranges)
 
         if len(tdc_vranges) > 0:
             self._min_tdc_version = sorted([i[0] for i in tdc_vranges], key=cmp_to_key(

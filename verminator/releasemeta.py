@@ -74,32 +74,35 @@ class ProductReleaseMeta(object):
         sorted_tdc_version = sorted(tdc_versions, key=cmp_to_key(
             lambda x, y: x.compares(y)
         ))
+        rv1 = rv2 = None
         if version is None:
-            return sorted_tdc_version[0], sorted_tdc_version[-1]
-
-        # Get compatible tdc versions in a normalized way
-        version = parse_version(version)
-        cv = self.get_compatible_versions(version)
-        versions = list()  # [(minv, maxv)]
-        for v1, v2 in cv.get(VC.OEM_NAME, list()):
-            if is_major_version(v1):
-                minv, maxv = None, None
-                for v in sorted_tdc_version:
-                    if v1 == to_major_version(v):
-                        minv = v
-                for v in sorted_tdc_version[::-1]:
-                    if v2 == to_major_version(v):
-                        maxv = v
-                if None in (minv, maxv):
-                    raise ValueError('Can not get valid tdc version range for {}'.format(version))
-                versions.append((minv, maxv))
-            else:
-                versions.append((v1, v2))
-
-        if len(versions) > 0:
-            return versions[0][0], versions[-1][1]
+            rv1, rv2 = sorted_tdc_version[0], sorted_tdc_version[-1]
         else:
-            return None
+            # Get compatible tdc versions in a normalized way
+            version = parse_version(version)
+            cv = self.get_compatible_versions(version)
+            versions = list()  # [(minv, maxv)]
+            for v1, v2 in cv.get(VC.OEM_NAME, list()):
+                if is_major_version(v1):
+                    minv, maxv = None, None
+                    for v in sorted_tdc_version:
+                        if v1 == to_major_version(v):
+                            minv = v
+                            break
+                    for v in sorted_tdc_version[::-1]:
+                        if v2 == to_major_version(v):
+                            maxv = v
+                            break
+                    if None in (minv, maxv):
+                        raise ValueError('Can not get valid tdc version range for {}'.format(version))
+                    versions.append((minv, maxv))
+                else:
+                    versions.append((v1, v2))
+
+            if len(versions) > 0:
+                rv1, rv2 = versions[0][0], versions[-1][1]
+
+        return None if None in (rv1, rv2) else (rv1, rv2)
 
     def get_compatible_versions(self, version):
         """ Given a product line name and a specific version,
