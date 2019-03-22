@@ -295,8 +295,6 @@ class VersionedInstance(object):
                 if global_range is not None:
                     tdc_vranges.append(global_range)
 
-        print(tdc_vranges)
-
         if len(tdc_vranges) > 0:
             self._min_tdc_version = sorted([i[0] for i in tdc_vranges], key=cmp_to_key(
                 lambda x, y: x.compares(y)
