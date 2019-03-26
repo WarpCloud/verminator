@@ -80,7 +80,7 @@ class ProductReleaseMeta(object):
         else:
             # Get compatible tdc versions in a normalized way
             version = parse_version(version)
-            cv = self.get_compatible_versions(version)
+            cv = self.get_compatible_versions(version, always_minor_versioned=True)
             versions = list()  # [(minv, maxv)]
             for v1, v2 in cv.get(VC.OEM_NAME, list()):
                 if is_major_version(v1):
@@ -104,7 +104,7 @@ class ProductReleaseMeta(object):
 
         return None if None in (rv1, rv2) else (rv1, rv2)
 
-    def get_compatible_versions(self, version):
+    def get_compatible_versions(self, version, always_minor_versioned=False):
         """ Given a product line name and a specific version,
         return the compatible product version ranges.
         """
@@ -113,29 +113,38 @@ class ProductReleaseMeta(object):
 
         # Check that the version is complete or in major form
         _is_major_version = is_major_version(version)
-        releases = self._major_versioned_releases \
-            if _is_major_version else self._releases
+        if not _is_major_version or always_minor_versioned:
+            releases = self._releases
+        else:
+            releases = self._major_versioned_releases
 
-        derived_constraints = {
-            product: [(version, version)]
+        derived_constraints = {}
+        declared_constraints = {
+            product: [(version, version)]  # We treat the input as declared constraint
         }
-        declared_constraints = {}
 
         for r, products in releases.items():
             rp = product_name(r)
             if product != rp:
                 # Derived
-                if product not in products or \
-                        not version.in_range(products[product][0], products[product][1]):
-                    continue
+                if product not in products:
+                    continue  # Omit mismathed product-line
+
+                if not _is_major_version:
+                    if not version.in_range(products[product][0], products[product][1]):
+                        continue  # Omit version range not containing target minor version
+                else:
+                    vmin, vmax = products[product]
+                    if not version.in_range(to_major_version(vmin), to_major_version(vmax)):
+                        continue
 
                 if rp not in derived_constraints:
                     derived_constraints[rp] = list()
                 derived_constraints[rp].append((r, r))
 
                 for p, vrange in products.items():
-                    if p == product:
-                        continue
+                    # if p == product:
+                    #     continue
                     if p not in derived_constraints:
                         derived_constraints[p] = list()
                     derived_constraints[p].append(vrange)
@@ -146,8 +155,8 @@ class ProductReleaseMeta(object):
                         declared_constraints[rp] = list()
                     declared_constraints[rp].append((r, r))
                     for p, vrange in products.items():
-                        if p == product:
-                            continue
+                        # if p == product:
+                        #     continue
                         if p not in declared_constraints:
                             declared_constraints[p] = list()
                         declared_constraints[p].append(vrange)

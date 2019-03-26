@@ -88,19 +88,20 @@ def to_major_version(version):
 
 
 def filter_vrange(this, other):
-    cmin, cmax = this
+    """Filter version range of `this` against the `other`.
+    """
+    tmin, tmax = this
     omin, omax = other
 
-    if product_name(cmin) == product_name(omin):
-        if omin is not None:
-            cmin = cmin if omin <= cmin else omin if omin < cmax else None
-        if omax is not None:
-            cmax = cmax if omax >= cmax else omax if omax > cmin else None
+    rmin, rmax = tmin, tmax
+    if product_name(tmin) == product_name(omin):
+        rmin = tmin if omin <= tmin else omin if omin <= tmax else None
+        rmax = tmax if omax >= tmax else omax if omax >= tmin else None
 
-    if None in (cmin, cmax):
+    if None in (rmin, rmax):
         return None
     else:
-        return (cmin, cmax)
+        return (rmin, rmax)
 
 
 def concatenate_vranges(vranges, hard_merging=False):
