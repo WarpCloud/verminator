@@ -68,14 +68,6 @@ The most commonly used verminator commands are:
             oemname=args.oemname
         )
 
-        print('Running validation ...')
-        _validate_instances(
-            instance_folder=args.instance_folder,
-            releasemeta=args.releasemeta,
-            dump=dump,
-            oemname=args.oemname
-        )
-
     def genoem(self):
         parser = argparse.ArgumentParser(description='Create an OEM release')
         parser.add_argument('-o', '--oemname', required=True, help='an oem name')
@@ -91,14 +83,6 @@ The most commonly used verminator commands are:
             oemname=args.oemname,
             dump=dump,
             releasemeta=args.releasemeta
-        )
-
-        print('Running validation ...')
-        _validate_instances(
-            instance_folder=args.instance_folder,
-            releasemeta=args.releasemeta,
-            dump=dump,
-            oemname=args.oemname
         )
 
 
