@@ -112,8 +112,10 @@ def concatenate_vranges(vranges, hard_merging=False):
             prefixes[prefix] = list()
         prefixes[prefix].append(vrange)
 
-    concatenated = [_concatenate_vranges_with_same_prefix(
-        vranges, hard_merging) for vranges in prefixes.values()]
+    concatenated = [
+        _concatenate_vranges_with_same_prefix(vranges, hard_merging)
+        for vranges in prefixes.values()
+    ]
 
     return [y for x in concatenated for y in x]
 
@@ -168,17 +170,3 @@ def _concatenate_vranges_with_same_prefix(vranges, hard_merging=False):
             res[-1] = (pmin, cmax)
 
     return res
-
-
-if __name__ == '__main__':
-    vranges = [
-        (FlexVersion.parse_version('sophonweb-1.2.0-final'),
-         FlexVersion.parse_version('sophonweb-2.2.0-final')),
-        (FlexVersion.parse_version('sophonweb-1.3.0-rc0'),
-         FlexVersion.parse_version('sophonweb-1.3.0-rc3'))
-    ]
-    print(concatenate_vranges(vranges))
-
-    assert str(replace_product_name('tdc-1.2', 'gzes')) == 'gzes-1.2'
-    assert str(replace_product_name('transwarp-1.2', 'gzes', by='tdc')) == 'transwarp-1.2'
-    assert str(replace_product_name('tdc-1.2', 'gzes', by='tdc')) == 'gzes-1.2'
