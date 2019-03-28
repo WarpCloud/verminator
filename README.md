@@ -4,10 +4,13 @@ TDC image Version control tERMINATOR.
 
 ## Install
 
-Requires Python 3.5+
-
+Requires Python 3.5+:
 ```bash
-pip3 install verminator -i http://172.16.1.161:30033/repository/pypi/simple/ --trusted-host=172.16.1.161
+pip install verminator
+```
+Or from source code
+```bash
+python setup.py install
 ```
 
 ## Usage
