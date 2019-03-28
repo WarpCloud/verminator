@@ -128,26 +128,34 @@ def _create_version(instance_folder, version, component=None, dump=True, release
     product = product_name(version)
     p = Path(instance_folder)
     assert p.is_dir()
+
+    # Load release metadata
     if releasemeta is not None:
         releasemeta = Path(releasemeta)
     else:
         releasemeta = p.joinpath('releases_meta.yaml')
     assert releasemeta.is_file()
     meta = ProductReleaseMeta(releasemeta)
+
+    # Get declared tdc version range from release meta
     tdc_vrange = meta.get_tdc_version_range(version)
     if tdc_vrange is None:
         raise ValueError('Version %s should be declared in releasemeta first' % version)
+
     component_found = False
     for instance_path in p.iterdir():
         if not instance_path.is_dir():
             continue
+
         if component is not None:
             if instance_path.name != component:
                 continue
             else:
                 component_found = True
+
         instance = Instance(instance_path.name, instance_path)
         has_version_for_product = False
+
         for ver, ins in instance.versioned_instances.items():
             if ins.find_latest_release(product):
                 has_version_for_product = True
@@ -155,6 +163,7 @@ def _create_version(instance_folder, version, component=None, dump=True, release
         if has_version_for_product:
             print('Creating release {} for {}'.format(version, instance.instance_type))
             instance.create_release(version)
+
         if not dump:
             instance.dump()
 

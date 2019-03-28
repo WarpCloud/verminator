@@ -221,9 +221,10 @@ class VersionedInstance(object):
         """
         version = parse_version(version)
         if version in self._releases:
-            print('Warning: Duplicated new version {} for {} {}'.format(
+            print('Warning: Duplicated new version {} for {} {}, skip'.format(
                 version, self.instance_type, self.major_version
             ))
+            return
 
         if from_release is None:
             from_release = self.find_latest_release(product_name(version))
@@ -242,7 +243,7 @@ class VersionedInstance(object):
                 minor_release.is_final = False
                 self._releases[major_version] = minor_release
             else:
-                print('Duplicated major version {} for {}, {}'.format(
+                print('Duplicated major version {} for {}, {}, skip'.format(
                     major_version, self.instance_type, self.major_version))
 
     def find_latest_release(self, product=None, is_final=False):
