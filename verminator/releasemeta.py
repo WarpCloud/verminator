@@ -22,7 +22,7 @@ class ProductReleaseMeta(object):
 
     def __init__(self, yaml_file):
         with open(yaml_file) as ifile:
-            self._raw_data = yaml.load(ifile)
+            self._raw_data = yaml.load(ifile, Loader=yaml.FullLoader)
         self._releases = self._load_releases()  # {tdc_release_ver: product: (minv, maxv)}
         self._major_versioned_releases = self._load_releases(True)
 

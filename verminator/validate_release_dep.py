@@ -109,7 +109,7 @@ def scan_instances(root_dir):
             imgpath = vpath.joinpath('images.yaml')
             assert Path(imgpath).exists(), \
                 'File images.yaml absent for {}/{}'.format(instance, version)
-            images = yaml.load(open(imgpath))
+            images = yaml.load(open(imgpath), Loader=yaml.FullLoader)
 
             # Validate images meta info
             validate_versioned_image(images, instance, version)
