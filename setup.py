@@ -55,7 +55,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     data_files=data_files,
-    url='http://172.16.1.41:10080/TDC/verminator',
+    url='http://github.com/WarpCloud/verminator',
     license='Transwarp',
     author='Xiaming Chen',
     author_email='xiaming.chen@transwarp.io',
