@@ -105,6 +105,13 @@ def filter_vrange(this, other):
 
 
 def concatenate_vranges(vranges, hard_merging=False):
+    """
+    Connect and merge version ranges.
+
+    :param vranges: a list of version ranges, i.e. [(minv, maxv), ...]
+    :param hard_merging: if performing merging without considering range overlapping.
+    :return: a list of concatenated version ranges, i.e. [(minv, maxv), ...]
+    """
     prefixes = dict()
     for vrange in vranges:
         prefix = vrange[0].prefix
@@ -121,8 +128,12 @@ def concatenate_vranges(vranges, hard_merging=False):
 
 
 def _concatenate_vranges_with_same_prefix(vranges, hard_merging=False):
-    """ Connect and merge version ranges.
-    @return a list of concatenated version ranges.
+    """
+    Connect and merge version ranges.
+
+    :param vranges: a list of version ranges, i.e. [(minv, maxv), ...]
+    :param hard_merging: if performing merging without considering range overlapping.
+    :return: a list of concatenated version ranges, i.e. [(minv, maxv), ...]
     """
     sorted_vranges = sorted(vranges, key=cmp_to_key(
         lambda x, y: FlexVersion.compares(x[0], y[0])

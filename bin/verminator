@@ -90,22 +90,27 @@ def _validate_instances(instance_folder, releasemeta=None, component=None, dump=
     verminator_config.set_oem(oemname)
     p = Path(instance_folder)
     assert p.is_dir()
+
     print('Validating versioned instances against release meta')
     if releasemeta is not None:
         releasemeta = Path(releasemeta)
     else:
         releasemeta = p.joinpath('releases_meta.yaml')
     assert releasemeta.is_file()
+
     meta = ProductReleaseMeta(releasemeta)
+
     component_found = False
     for instance_path in p.iterdir():
         if not instance_path.is_dir():
             continue
+
         if component is not None:
             if instance_path.name != component:
                 continue
             else:
                 component_found = True
+
         instance = Instance(instance_path.name, instance_path)
         for ver, versioned_ins in instance.versioned_instances.items():
             print(instance_path.joinpath(ver))
@@ -154,15 +159,19 @@ def _create_version(instance_folder, version, component=None, dump=True, release
                 component_found = True
 
         instance = Instance(instance_path.name, instance_path)
-        has_version_for_product = False
 
+        has_latest_version = False
         for ver, ins in instance.versioned_instances.items():
             if ins.find_latest_release(product):
-                has_version_for_product = True
+                has_latest_version = True
+                break
 
-        if has_version_for_product:
+        if has_latest_version:
             print('Creating release {} for {}'.format(version, instance.instance_type))
             instance.create_release(version)
+        else:
+            print('Warning: no latest version found for {} given product {}'
+                  .format(instance.instance_type, product))
 
         if not dump:
             instance.dump()

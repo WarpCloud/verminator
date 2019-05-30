@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# This library deals with the instances images of product-meta,
+# which has following folder structure as mapped by the data objects:
+# product-meta:
+# |__ ...
+# |__instances [class Instance]
+#    |__version1 [class VersionedInstance]
+#       |__images.yml [class Release]
 from pathlib import Path
 
 from .config import verminator_config as VC
@@ -251,15 +258,20 @@ class VersionedInstance(object):
         """
         latest_release = None
         for r in self.ordered_releases[::-1]:
+            # Ignore non-final releases
             if is_final and not r.is_final:
                 continue
+
+            # Find the first release (reversely) for given product
             rp = product_name(r.release_version)
             if product is not None:
                 latest_release = r if rp == product else None
             else:
                 latest_release = r if rp != product else None
+
             if latest_release is not None:
                 break
+
         return latest_release
 
     def validate(self, release_meta):
@@ -274,7 +286,7 @@ class VersionedInstance(object):
             release.validate_tdc_minmax_version(self._min_tdc_version, self._max_tdc_version)
 
         self.validate_hot_fix_ranges()
-        self.validate_tdc_not_dependent_on_other_product_lines() # Disable it for now
+        # self.validate_tdc_not_dependent_on_other_product_lines()  # Disable it for now
         self.validate_releases(release_meta)
 
     def update_tdc_minmax_version(self, release_meta):
@@ -359,7 +371,8 @@ class VersionedInstance(object):
 
             # Get compatible version ranges for each product
             #   {product: [(minv, maxv), (minv, maxv)]}
-            cv = releasemeta.get_compatible_versions(r.release_version)
+            # WARP-34008: support instance-specific constraints
+            cv = releasemeta.get_compatible_versions(r.release_version, instance_name=r.instance_type)
 
             # Filter vrange by tdc min-max version
             _is_major_version = is_major_version(r.release_version)

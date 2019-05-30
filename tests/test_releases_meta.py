@@ -12,10 +12,11 @@ class ProductReleaseMetaCase(unittest.TestCase):
         self.oem_yml = this_file.parent.joinpath('releasesmeta/oem.yml')
         self.tdc_yml = this_file.parent.joinpath('releasesmeta/tdc.yml')
         self.tdc2ex_yml = this_file.parent.joinpath('releasesmeta/tdc2ex.yml')
+        self.tdc3ex_yml = this_file.parent.joinpath('releasesmeta/tdc3ex.yml')
 
     def test_official(self):
         meta = ProductReleaseMeta(self.tdc_yml)
-        releases = [str(i) for i in meta.major_versioned_releases.keys()]
+        releases = [str(i) for i in meta.get_major_versioned_releases().keys()]
         self.assertTrue('tdc-1.0' in releases)
         self.assertTrue('tdc-1.1' in releases)
         self.assertTrue('tdc-1.2' in releases)
@@ -23,7 +24,7 @@ class ProductReleaseMetaCase(unittest.TestCase):
 
     def test_oem(self):
         meta = ProductReleaseMeta(self.oem_yml)
-        releases = [str(i) for i in meta.major_versioned_releases.keys()]
+        releases = [str(i) for i in meta.get_major_versioned_releases().keys()]
         self.assertTrue('gzes-1.0' in releases)
         self.assertTrue('gzes-1.1' in releases)
         self.assertTrue('gzes-1.2' in releases)
@@ -104,3 +105,23 @@ class ProductReleaseMetaCase(unittest.TestCase):
 
         pv = meta.get_tdc_version_range('sophonweb-2.2')
         self.assert_vrange_equal(pv, ('tdc-2.0.0-rc0', 'tdc-2.0.0-rc3'))
+
+    def test_get_compatible_versions_for_instance(self):
+        meta = ProductReleaseMeta(self.tdc3ex_yml)
+        pv = meta.get_compatible_versions('5.2.2', instance_name='tdh-metrics-exporter')
+        self.assert_vrange_equal(pv.get('transwarp')[0], ('transwarp-5.2.2-final', 'transwarp-5.2.2-final'))
+        self.assertTrue(pv.get('sophonweb') is None)
+        self.assertTrue(pv.get('tdc') is None)
+        self.assertTrue(pv.get('tos') is None)
+
+        pv = meta.get_compatible_versions('6.0.0', instance_name='tdh-metrics-exporter')
+        self.assert_vrange_equal(pv.get('transwarp')[0], ('transwarp-6.0.2-final', 'transwarp-6.0.2-final'))
+        self.assertTrue(pv.get('sophonweb') is None)
+        self.assertTrue(pv.get('tdc') is None)
+        self.assertTrue(pv.get('tos') is None)
+
+        pv = meta.get_compatible_versions('sophonweb-2.2.1-final', instance_name='workflow')
+        self.assert_vrange_equal(pv.get('transwarp')[0], ('transwarp-5.2.4-final', 'transwarp-5.2.4-final'))
+        self.assert_vrange_equal(pv.get('sophonweb')[0], ('sophonweb-2.2.1-final', 'sophonweb-2.2.1-final'))
+        self.assert_vrange_equal(pv.get('tos')[0], ('tos-1.9.2-final', 'tos-1.9.2-final'))
+        self.assert_vrange_equal(pv.get('tdc')[0], ('tdc-2.0.0-rc3', 'tdc-2.0.0-rc3'))
