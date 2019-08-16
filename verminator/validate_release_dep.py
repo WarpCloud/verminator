@@ -176,8 +176,8 @@ def validate_dependence_versions():
     # version as in defined range
     for instance_name, versions in all_instance_releases.items():
         for instance_version, release_info in versions.items():
-            # print('Validating dependence of {} version {}'.format(
-            #     release_info.instance_name, instance_version))
+            print('Validating dependence of {} version {}'.format(
+                release_info.instance_name, instance_version))
             dependencies = release_info.dependencies
             for dep in dependencies:
                 dep_type = dep.type
