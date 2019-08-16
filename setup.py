@@ -27,7 +27,7 @@
 import os
 from setuptools import setup, find_packages
 
-__version__ = '1.2.5'
+__version__ = '1.2.6'
 
 
 def walk_path_files(directory, target_folder=None):
