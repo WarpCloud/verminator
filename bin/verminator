@@ -142,11 +142,13 @@ The most commonly used verminator commands are:
                 else:
                     component_found = True
             instance = Instance(instance_path.name, instance_path, omitsample)
+            # Check if the instance has at least one release version
             has_latest_version = False
             for ver, ins in instance.versioned_instances.items():
                 if ins.find_latest_release(product):
                     has_latest_version = True
                     break
+            # Create a new versioned instance if a latest one found
             if has_latest_version:
                 print('Creating release {} for {}'.format(version, instance.instance_type))
                 instance.create_release(version)
