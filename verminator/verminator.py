@@ -15,14 +15,24 @@ __all__ = ['Instance', 'VersionedInstance', 'Release']
 
 
 class Instance(object):
-    def __init__(self, instance_type, instance_folder):
+    def __init__(self, instance_type, instance_folder, omitsample=False):
         self.instance_type = instance_type
         self.instance_folder = Path(instance_folder)
         self.versioned_instances = dict()  # {major_version_num: VersionedInstance}
 
+        if omitsample and instance_type.startswith('_'):
+            # Omit instance with private symbol '_'
+            return
+
         for ver in self.instance_folder.iterdir():
+            if omitsample and ver.name.startswith('_'):
+                # Omit instance version with private symbol '_'
+                continue
             image_file = ver.joinpath('images.yaml')
-            dat = yaml.load(open(image_file))
+            if not image_file.exists():
+                # Omit subfolder without valid images yaml
+                continue
+            dat = yaml.load(open(image_file), Loader=yaml.FullLoader)
             ins = VersionedInstance(**dat)
             self.add_versioned_instance(ver.name, ins)
 

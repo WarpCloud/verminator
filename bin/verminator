@@ -27,172 +27,151 @@ The most commonly used verminator commands are:
             exit(1)
         getattr(self, args.command)()
 
-    def validate(self):
-        parser = argparse.ArgumentParser(
-            description='Validate existing image versions and fix errors automatically')
-        parser.add_argument('-c', '--component', help='a specific instance to validate')
-        parser.add_argument('-o', '--oemname', help='an oem name')
-        parser.add_argument('--releasemeta', help='the releases_meta.yml file')
-        parser.add_argument('--nodump', action='store_false', help='if dumpping update')
-        parser.add_argument('instance_folder', help='the instances folder of images definition')
-        args = parser.parse_args(sys.argv[2:])
+    def _subcmd_parser(self, description):
+        parser = argparse.ArgumentParser(description=description)
+        parser.add_argument('-s', '--sampleomit', action='store_false', help='Omit sample folder starting with underscore')
+        parser.add_argument('-c', '--component', help='A specific instance to validate (omit by subcommandgenoem)')
+        parser.add_argument('-o', '--oemname', help='An oem name')
+        parser.add_argument('-r', '--releasemeta', help='The releases_meta.yml file')
+        parser.add_argument('-n', '--nodump', action='store_false', help='If dumpping update')
+        parser.add_argument('instance_folder', help='The instances folder of images definition')
+        return parser
 
+    def validate(self):
+        parser = self._subcmd_parser('Validate existing image versions and fix errors automatically')
+        args = parser.parse_args(sys.argv[2:])
         print('Running validation, instance_folder=%s, releasemeta=%s ...' % \
               (args.instance_folder, args.releasemeta))
-        _validate_instances(
+        self._validate_instances(
             instance_folder=args.instance_folder,
             releasemeta=args.releasemeta,
             component=args.component,
             dump=not args.nodump,
-            oemname=args.oemname
+            oemname=args.oemname,
+            omitsample=args.sampleomit
         )
 
     def genver(self):
-        parser = argparse.ArgumentParser(description='Create a new release version')
+        parser = self._subcmd_parser(description='Create a new release version')
         parser.add_argument('-v', '--version', required=True, help='a new version for product line')
-        parser.add_argument('-c', '--component', help='a specific instance to validate')
-        parser.add_argument('-o', '--oemname', help='an oem name')
-        parser.add_argument('--releasemeta', help='the releases_meta.yml file')
-        parser.add_argument('--nodump', action='store_false', help='if dumpping update')
-        parser.add_argument('instance_folder', help='the instances folder of images definition')
         args = parser.parse_args(sys.argv[2:])
-        dump = not args.nodump
-
         print('Running version creation ...')
-        _create_version(
+        self._create_version(
             instance_folder=args.instance_folder,
             version=args.version,
             component=args.component,
-            dump=dump,
+            dump=not args.nodump,
             releasemeta=args.releasemeta,
-            oemname=args.oemname
+            oemname=args.oemname,
+            omitsample=args.sampleomit
         )
 
     def genoem(self):
-        parser = argparse.ArgumentParser(description='Create an OEM release')
-        parser.add_argument('-o', '--oemname', required=True, help='an oem name')
-        parser.add_argument('--releasemeta', help='the releases_meta.yml file')
-        parser.add_argument('--nodump', action='store_false', help='if dumpping update')
-        parser.add_argument('instance_folder', help='the instances folder of images definition')
+        parser = self._subcmd_parser(description='Create an OEM release')
         args = parser.parse_args(sys.argv[2:])
-        dump = not args.nodump
-
         print('Running OEM creation, oemname=%s ...' % args.oemname)
-        _create_oem(
+        self._create_oem(
             instance_folder=args.instance_folder,
             oemname=args.oemname,
-            dump=dump,
-            releasemeta=args.releasemeta
+            dump=not args.nodump,
+            releasemeta=args.releasemeta,
+            omitsample=args.sampleomit
         )
 
-
-def _validate_instances(instance_folder, releasemeta=None, component=None, dump=True, oemname=None):
-    verminator_config.set_oem(oemname)
-    p = Path(instance_folder)
-    assert p.is_dir()
-
-    print('Validating versioned instances against release meta')
-    if releasemeta is not None:
-        releasemeta = Path(releasemeta)
-    else:
-        releasemeta = p.joinpath('releases_meta.yaml')
-    assert releasemeta.is_file()
-
-    meta = ProductReleaseMeta(releasemeta)
-
-    component_found = False
-    for instance_path in p.iterdir():
-        if not instance_path.is_dir():
-            continue
-
-        if component is not None:
-            if instance_path.name != component:
-                continue
-            else:
-                component_found = True
-
-        instance = Instance(instance_path.name, instance_path)
-        for ver, versioned_ins in instance.versioned_instances.items():
-            print(instance_path.joinpath(ver))
-            versioned_ins.validate(meta)
-
-        if not dump:
-            instance.dump()
-
-    if component is not None and not component_found:
-        raise ValueError('Component %s not found in folder %s' % (component, instance_folder))
-
-    print('Validating release dependencies (originally from product-meta testing')
-    from verminator.validate_release_dep import scan_instances, validate_dependence_versions
-    scan_instances(p)
-    validate_dependence_versions()
-
-
-def _create_version(instance_folder, version, component=None, dump=True, releasemeta=None, oemname=None):
-    verminator_config.set_oem(oemname)
-    product = product_name(version)
-    p = Path(instance_folder)
-    assert p.is_dir()
-
-    # Load release metadata
-    if releasemeta is not None:
-        releasemeta = Path(releasemeta)
-    else:
-        releasemeta = p.joinpath('releases_meta.yaml')
-    assert releasemeta.is_file()
-    meta = ProductReleaseMeta(releasemeta)
-
-    # Get declared tdc version range from release meta
-    tdc_vrange = meta.get_tdc_version_range(version)
-    if tdc_vrange is None:
-        raise ValueError('Version %s should be declared in releasemeta first' % version)
-
-    component_found = False
-    for instance_path in p.iterdir():
-        if not instance_path.is_dir():
-            continue
-
-        if component is not None:
-            if instance_path.name != component:
-                continue
-            else:
-                component_found = True
-
-        instance = Instance(instance_path.name, instance_path)
-
-        has_latest_version = False
-        for ver, ins in instance.versioned_instances.items():
-            if ins.find_latest_release(product):
-                has_latest_version = True
-                break
-
-        if has_latest_version:
-            print('Creating release {} for {}'.format(version, instance.instance_type))
-            instance.create_release(version)
+    def _load_release_meta(self, releasemeta, ins_folder):
+        if releasemeta is not None:
+            releasemeta = Path(releasemeta)
         else:
-            print('Warning: no latest version found for {} given product {}'
-                  .format(instance.instance_type, product))
+            releasemeta = ins_folder.joinpath('releases_meta.yaml')
+        assert releasemeta.is_file()
+        return ProductReleaseMeta(releasemeta)
 
-        if not dump:
-            instance.dump()
+    def _validate_instances(self, instance_folder, releasemeta=None, 
+            component=None, dump=True, oemname=None, omitsample=False):
+        verminator_config.set_oem(oemname)
+        p = Path(instance_folder)
+        assert p.is_dir(), 'Path {} not found or existed'.format(instance_folder)
 
-    if component is not None and not component_found:
-        raise ValueError('Component %s not found in folder %s' % (component, instance_folder))
+        print('Validating versioned instances against release meta')
+        meta = self._load_release_meta(releasemeta, p)
 
+        component_found = False
+        for instance_path in p.iterdir():
+            if not instance_path.is_dir():
+                continue
+            if component is not None:
+                if instance_path.name != component:
+                    continue
+                else:
+                    component_found = True
+            instance = Instance(instance_path.name, instance_path, omitsample)
+            for ver, versioned_ins in instance.versioned_instances.items():
+                print(instance_path.joinpath(ver))
+                versioned_ins.validate(meta)
+            if not dump:
+                instance.dump()
+        if component is not None and not component_found:
+            raise ValueError('Component %s not found in folder %s' % (component, instance_folder))
 
-def _create_oem(instance_folder, oemname, dump=True, releasemeta=None):
-    verminator_config.set_oem(oemname)
-    p = Path(instance_folder)
-    assert p.is_dir()
-    for instance_path in p.iterdir():
-        if not instance_path.is_dir():
-            continue
-        instance = Instance(instance_path.name, instance_path)
-        for ver, versioned_ins in instance.versioned_instances.items():
-            print(instance_path.joinpath(ver))
-            versioned_ins.convert_oem()
-        if not dump:
-            instance.dump()
+        print('Validating release dependencies ...')
+        from verminator.release_dep import scan_instances, validate_dependence_versions
+        scan_instances(p, omitsample)
+        validate_dependence_versions()
+
+    def _create_version(self, instance_folder, version, component=None,
+            dump=True, releasemeta=None, oemname=None, omitsample=False):
+        verminator_config.set_oem(oemname)
+        product = product_name(version)
+        p = Path(instance_folder)
+        assert p.is_dir(), 'Path {} not found or existed'.format(instance_folder)
+
+        print('Validating versioned instances against release meta')
+        meta = self._load_release_meta(releasemeta, p)
+        # Get declared tdc version range from release meta
+        tdc_vrange = meta.get_tdc_version_range(version)
+        if tdc_vrange is None:
+            raise ValueError('Version %s should be declared in releasemeta first' % version)
+
+        component_found = False
+        for instance_path in p.iterdir():
+            if not instance_path.is_dir():
+                continue
+            if component is not None:
+                if instance_path.name != component:
+                    continue
+                else:
+                    component_found = True
+            instance = Instance(instance_path.name, instance_path, omitsample)
+            has_latest_version = False
+            for ver, ins in instance.versioned_instances.items():
+                if ins.find_latest_release(product):
+                    has_latest_version = True
+                    break
+            if has_latest_version:
+                print('Creating release {} for {}'.format(version, instance.instance_type))
+                instance.create_release(version)
+            else:
+                print('Warning: no latest version found for {} given product {}'
+                    .format(instance.instance_type, product))
+            if not dump:
+                instance.dump()
+        if component is not None and not component_found:
+            raise ValueError('Component %s not found in folder %s' % (component, instance_folder))
+
+    def _create_oem(self, instance_folder, oemname, dump=True,
+            releasemeta=None, omitsample=False):
+        verminator_config.set_oem(oemname)
+        p = Path(instance_folder)
+        assert p.is_dir(), 'Path {} not found or existed'.format(instance_folder)
+        for instance_path in p.iterdir():
+            if not instance_path.is_dir():
+                continue
+            instance = Instance(instance_path.name, instance_path, omitsample)
+            for ver, versioned_ins in instance.versioned_instances.items():
+                print(instance_path.joinpath(ver))
+                versioned_ins.convert_oem()
+            if not dump:
+                instance.dump()
 
 
 if __name__ == '__main__':

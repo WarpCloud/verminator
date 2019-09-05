@@ -93,13 +93,15 @@ class ReleaseInfo(object):
         return cls.__instance_releases
 
 
-def scan_instances(root_dir):
+def scan_instances(root_dir, omitsample=False):
     """
     Scan all instances directories
     """
     rp = Path(root_dir)
-    instances = [x for x in rp.iterdir() if x.is_dir()]
-    for instance in instances:
+    for instance in rp.iterdir():
+        if not instance.is_dir() or \
+            (omitsample and instance.name.startswith('_')):
+            continue
         instance = instance.name
         inspath = Path(rp.joinpath(instance))
         versions = [x for x in inspath.iterdir() if x.is_dir()]
@@ -107,8 +109,9 @@ def scan_instances(root_dir):
             version = version.name
             vpath = inspath.joinpath(version)
             imgpath = vpath.joinpath('images.yaml')
-            assert Path(imgpath).exists(), \
-                'File images.yaml absent for {}/{}'.format(instance, version)
+            if not imgpath.exists():
+                # Omit subfolder without valid images yaml
+                continue
             images = yaml.load(open(imgpath), Loader=yaml.FullLoader)
 
             # Validate images meta info
