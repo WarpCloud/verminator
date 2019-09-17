@@ -217,8 +217,8 @@ class VersionedInstance(object):
         # Validate the image completeness
         for image_name in r.image_version:
             assert image_name in self._images, \
-                'Image name %s of release %s should be declared first' % (
-                    image_name, self.instance_type)
+                'Image name %s of release %s %s should be declared first' % (
+                    image_name, self.instance_type, self.major_version)
         self._releases[r.release_version] = r
 
     def get_release(self, release_version, default=None):

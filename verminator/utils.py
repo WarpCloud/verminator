@@ -7,6 +7,8 @@ from flex_version import FlexVersion, VersionMeta, VersionDelta
 
 # Customized version suffix ordering
 FlexVersion.ordered_suffix = ['rc', 'final', None]
+VersionMeta._v_regex = r"(?P<prefix>.*\-)?(?P<major>\d+)(?P<minor>\.\d+)?" + \
+               r"(?P<maintenance>\.\d+)?(?P<build>\.\d+)?(?P<suffix_raw>\-.*)?"
 
 
 def ordered_yaml_load(yaml_path, Loader=yaml.Loader,
