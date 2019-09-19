@@ -114,7 +114,7 @@ The most commonly used verminator commands are:
             raise ValueError('Component %s not found in folder %s' % (component, instance_folder))
 
         print('Validating release dependencies ...')
-        from verminator.release_dep import scan_instances, validate_dependence_versions
+        from verminator.validate_release_dep import scan_instances, validate_dependence_versions
         scan_instances(p, omitsample)
         validate_dependence_versions()
 
