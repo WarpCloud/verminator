@@ -114,6 +114,9 @@ def concatenate_vranges(vranges, hard_merging=False):
     :param hard_merging: if performing merging without considering range overlapping.
     :return: a list of concatenated version ranges, i.e. [(minv, maxv), ...]
     """
+    if len(vranges) <= 1:
+        return vranges
+
     prefixes = dict()
     for vrange in vranges:
         prefix = vrange[0].prefix

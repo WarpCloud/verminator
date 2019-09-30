@@ -377,8 +377,11 @@ class VersionedInstance(object):
                               .format(release.instance_type, release.release_version, dep))
 
     def validate_releases(self, releasemeta):
-        for r in self.ordered_releases:
+        # For debugging
+        # if self.instance_type == 'sophon' and str(self.major_version) == '2.3':
+        #     print(self.instance_type, self.major_version)
 
+        for r in self.ordered_releases:
             # Get compatible version ranges for each product
             #   {product: [(minv, maxv), (minv, maxv)]}
             # WARP-34008: support instance-specific constraints
@@ -411,7 +414,9 @@ class VersionedInstance(object):
                             'No valid version range declared for instance {}, version {} in releasemeta'
                                 .format(self.instance_type, r.release_version)
                         )
-                    minv, maxv = cv[product][0]
+                    else:
+                        # TODO: it seems safe to merge dependency release versions
+                        minv, maxv = concatenate_vranges(cv[product], hard_merging=True)[0]
                 else:
                     minv, maxv = vrange
 
