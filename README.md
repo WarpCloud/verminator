@@ -33,6 +33,7 @@ verminator validate -c inceptor /path/to/product-meta/instances
 
 ```bash
 verminator genoem -o gzes /path/to/product-meta/instances
+verminator validate -o gzes /path/to/product-meta/instances
 ```
 
 ### Create a new version
