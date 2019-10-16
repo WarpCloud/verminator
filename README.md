@@ -31,6 +31,8 @@ verminator validate -c inceptor /path/to/product-meta/instances
 
 ### Create a new OEM
 
+1. Replace `tdc-` with oem prefix say `gzes-` in release_meta.yaml
+2. Update instance releases
 ```bash
 verminator genoem -o gzes /path/to/product-meta/instances
 verminator validate -o gzes /path/to/product-meta/instances
