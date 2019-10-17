@@ -295,9 +295,10 @@ class VersionedInstance(object):
             release.validate_final_flag()
             release.validate_tdc_minmax_version(self._min_tdc_version, self._max_tdc_version)
 
-        self.validate_hot_fix_ranges()
-        # self.validate_tdc_not_dependent_on_other_product_lines()  # Disable it for now
-        self.validate_releases(release_meta)
+        self._validate_hot_fix_ranges()
+        # self._validate_tdc_not_dependent_on_other_product_lines()  # Disable it for now
+        self._validate_releases(release_meta)
+        self._validate_declared_tdc_releases(release_meta)
 
     def update_tdc_minmax_version(self, release_meta):
         global_range = release_meta.get_tdc_version_range()
@@ -330,7 +331,7 @@ class VersionedInstance(object):
                 self.instance_type, self.major_version)
             )
 
-    def validate_hot_fix_ranges(self):
+    def _validate_hot_fix_ranges(self):
         """Validate release versions and hot-fix ranges.
         Fix errors if possible
         """
@@ -367,7 +368,7 @@ class VersionedInstance(object):
             'Release version %s of "%s" should be located in a specific hot-fix range' % \
             (version, self.instance_type)
 
-    def validate_tdc_not_dependent_on_other_product_lines(self):
+    def _validate_tdc_not_dependent_on_other_product_lines(self):
         for release in self._releases.values():
             product = product_name(release.release_version)
             if product == VC.OEM_NAME:
@@ -376,8 +377,10 @@ class VersionedInstance(object):
                         print('Warning: TDC should be independent product, instance "{}", {}, dep "{}"'
                               .format(release.instance_type, release.release_version, dep))
 
-    def validate_releases(self, releasemeta):
-        # For debugging
+    def _validate_releases(self, releasemeta):
+        """Validate all releases of the instance.
+        """
+        ## For debugging
         # if self.instance_type == 'sophon' and str(self.major_version) == '2.3':
         #     print(self.instance_type, self.major_version)
 
@@ -391,7 +394,6 @@ class VersionedInstance(object):
             _is_major_version = is_major_version(r.release_version)
             minv = parse_version(self._min_tdc_version, _is_major_version)
             maxv = parse_version(self._max_tdc_version, _is_major_version)
-
             if product_name(r.release_version) == VC.OEM_NAME:
                 for pname in cv:
                     filtered = list()
@@ -402,36 +404,35 @@ class VersionedInstance(object):
                     if not filtered:
                         print('Warning: Release {} of instance "{}" is filtered out by min-max tdc version.'
                               .format(r.release_version, r.instance_type))
-
                     cv[pname] = filtered
 
             # Validate the dependency versions
             for instance, vrange in r.dependencies.items():
                 product = product_name(vrange[0])
-                if product in cv:
+                if product not in cv:
+                    minv, maxv = vrange
+                else:
                     if len(cv[product]) == 0:
                         raise ValueError(
                             'No valid version range declared for instance {}, version {} in releasemeta'
-                                .format(self.instance_type, r.release_version)
-                        )
+                                .format(self.instance_type, r.release_version))
                     else:
                         # TODO: it seems safe to merge dependency release versions
                         minv, maxv = concatenate_vranges(cv[product], hard_merging=True)[0]
-                else:
-                    minv, maxv = vrange
-
                 if minv != vrange[0]:
                     print('Warning: incompatible min version {} (should be {}) for dep "{}" of release "{}" version {}'
                           .format(vrange[0], minv, instance, r.instance_type, r.release_version))
-
                 if maxv != vrange[1]:
                     print('Warning: incompatible max version {} (should be {}) for dep "{}" of release "{}" version {}'
                           .format(vrange[1], maxv, instance, r.instance_type, r.release_version))
-
                 r.dependencies[instance] = (minv, maxv)
 
-    def to_yaml(self):
+    def _validate_declared_tdc_releases(self, releasemeta):
+        """The declared TDC releases in release_meta.yaml should be also declared in images.yaml
+        """
+        pass
 
+    def to_yaml(self):
         # Ordered keys
         res = OrderedDict()
         res['instance-type'] = self.instance_type

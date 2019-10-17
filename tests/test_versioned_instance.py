@@ -18,7 +18,7 @@ class VersionedInstanceCase(unittest.TestCase):
         versioned_instance = VersionedInstance(**yaml.load(open(self.versioned_instance_yml)))
         self.assertTrue(str(versioned_instance.min_tdc_version) == 'tdc-2.0.0-rc0')
         self.assertTrue(str(versioned_instance.max_tdc_version) == 'tdc-2.0.0-rc9')
-        versioned_instance.validate_releases(meta)
+        versioned_instance._validate_releases(meta)
         self.assertTrue(versioned_instance is not None)
         release = versioned_instance.get_release('5.2.2')
         for dep in release.dependencies:

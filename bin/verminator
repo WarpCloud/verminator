@@ -92,9 +92,11 @@ The most commonly used verminator commands are:
         p = Path(instance_folder)
         assert p.is_dir(), 'Path {} not found or existed'.format(instance_folder)
 
+        # Load release meta
         print('Validating versioned instances against release meta')
         meta = self._load_release_meta(releasemeta, p)
 
+        # Iterate over all instances
         component_found = False
         for instance_path in p.iterdir():
             if not instance_path.is_dir():
@@ -107,6 +109,7 @@ The most commonly used verminator commands are:
             instance = Instance(instance_path.name, instance_path, omitsample)
             for ver, versioned_ins in instance.versioned_instances.items():
                 print(instance_path.joinpath(ver))
+                # Validate specific versioned instance
                 versioned_ins.validate(meta)
             if not dump:
                 instance.dump()

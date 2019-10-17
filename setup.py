@@ -25,9 +25,10 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import os
+
 from setuptools import setup, find_packages
 
-__version__ = '1.3.3.5'
+from verminator import __version__
 
 
 def walk_path_files(directory, target_folder=None):
