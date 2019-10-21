@@ -299,6 +299,7 @@ class VersionedInstance(object):
         # self._validate_tdc_not_dependent_on_other_product_lines()  # Disable it for now
         self._validate_releases(release_meta)
         self._validate_declared_tdc_releases(release_meta)
+        self._validate_argodb_images(release_meta)
 
     def update_tdc_minmax_version(self, release_meta):
         global_range = release_meta.get_tdc_version_range()
@@ -377,7 +378,7 @@ class VersionedInstance(object):
                         print('Warning: TDC should be independent product, instance "{}", {}, dep "{}"'
                               .format(release.instance_type, release.release_version, dep))
 
-    def _validate_releases(self, releasemeta):
+    def _validate_releases(self, release_meta):
         """Validate all releases of the instance.
         """
         ## For debugging
@@ -388,7 +389,7 @@ class VersionedInstance(object):
             # Get compatible version ranges for each product
             #   {product: [(minv, maxv), (minv, maxv)]}
             # WARP-34008: support instance-specific constraints
-            cv = releasemeta.get_compatible_versions(r.release_version, instance_name=r.instance_type)
+            cv = release_meta.get_compatible_versions(r.release_version, instance_name=r.instance_type)
 
             # Filter vrange by tdc min-max version
             _is_major_version = is_major_version(r.release_version)
@@ -427,10 +428,22 @@ class VersionedInstance(object):
                           .format(vrange[1], maxv, instance, r.instance_type, r.release_version))
                 r.dependencies[instance] = (minv, maxv)
 
-    def _validate_declared_tdc_releases(self, releasemeta):
+    def _validate_declared_tdc_releases(self, release_meta):
         """The declared TDC releases in release_meta.yaml should be also declared in images.yaml
         """
         pass
+
+    def _validate_argodb_images(self, release_meta):
+        """
+        Fix custom terminal image version for argodb, WARP-38405
+        """
+        if self.instance_type == 'terminal':
+            for release_ver, release in self._releases.items():
+                if release_ver.prefix != 'argodb':
+                    continue
+                tdc_vrange = release_meta.get_tdc_version_range(release_ver, self.instance_type)
+                release.image_version['terminal_image'] = tdc_vrange[1]
+                print('WARNING: set terminal image for argodb {} as {} (WARP-38405)'.format(release_ver, tdc_vrange[1]))
 
     def to_yaml(self):
         # Ordered keys
