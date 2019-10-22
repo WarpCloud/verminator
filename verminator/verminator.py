@@ -90,6 +90,39 @@ class Instance(object):
             new_instance.create_release(version, ref_release, with_major=True)
             self.versioned_instances[major_version_num] = new_instance
 
+    def has_release(self, release_version):
+        for ver, versioned_ins in self.versioned_instances.items():
+            if versioned_ins.has_release(release_version):
+                return True
+        return False
+
+    def validate(self, release_meta):
+        self._validate_declared_tdc_releases(release_meta)
+        for ver, versioned_ins in self.versioned_instances.items():
+            print(self.instance_folder.joinpath(ver))
+            # Validate specific versioned instance
+            versioned_ins.validate(release_meta)
+
+    def _validate_declared_tdc_releases(self, release_meta):
+        """The declared TDC releases in release_meta.yaml should be also declared in images.yaml
+        """
+        tdc_releases = [i for i in release_meta.get_releases().keys() if i.prefix == VC.OEM_NAME]
+
+        # Check if the instance contains TDC versioned releases
+        found = False
+        for ver, versioned_ins in self.versioned_instances.items():
+            for release in versioned_ins.releases:
+                if release.release_version.prefix == VC.OEM_NAME:
+                    found = True
+                    break
+
+        if found:
+            for tdc_version in tdc_releases:
+                if not self.has_release(tdc_version):
+                    raise ValueError("Absent TDC release '{}' defined in meta for instance {}".format(
+                        tdc_version, self.instance_type
+                    ))
+
     def dump(self):
         for ver, ins in self.versioned_instances.items():
             version_folder = self.instance_folder.joinpath(ver)
@@ -298,7 +331,6 @@ class VersionedInstance(object):
         self._validate_hot_fix_ranges()
         # self._validate_tdc_not_dependent_on_other_product_lines()  # Disable it for now
         self._validate_releases(release_meta)
-        self._validate_declared_tdc_releases(release_meta)
         self._validate_argodb_images(release_meta)
 
     def update_tdc_minmax_version(self, release_meta):
@@ -427,11 +459,6 @@ class VersionedInstance(object):
                     print('Warning: incompatible max version {} (should be {}) for dep "{}" of release "{}" version {}'
                           .format(vrange[1], maxv, instance, r.instance_type, r.release_version))
                 r.dependencies[instance] = (minv, maxv)
-
-    def _validate_declared_tdc_releases(self, release_meta):
-        """The declared TDC releases in release_meta.yaml should be also declared in images.yaml
-        """
-        pass
 
     def _validate_argodb_images(self, release_meta):
         """
