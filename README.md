@@ -1,5 +1,9 @@
 # Verminator
 
+[![Latest](https://img.shields.io/pypi/v/verminator.svg)](https://pypi.python.org/pypi/verminator)
+[![Status](https://img.shields.io/pypi/status/verminator.svg)](https://pypi.python.org/pypi/verminator)
+[![PyV](https://img.shields.io/pypi/pyversions/verminator.svg)](https://pypi.python.org/pypi/verminator)
+
 TDC image Version control tERMINATOR.
 
 ## Install
