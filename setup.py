@@ -28,7 +28,7 @@ import os
 
 from setuptools import setup, find_packages
 
-from verminator import __version__
+__version__ = '1.3.4.1'
 
 
 def walk_path_files(directory, target_folder=None):
