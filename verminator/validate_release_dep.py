@@ -122,6 +122,7 @@ def validate_versioned_image(images, instance_name, instance_version):
     """
     Validate the meta info of images defined for each instance
     """
+    print('Validating versioned instance {}, {}'.format(instance_name, instance_version))
     assert images['instance-type'].lower() == instance_name.lower()
     assert images['major-version'] == instance_version
     assert 'images' in images
