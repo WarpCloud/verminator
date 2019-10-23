@@ -138,15 +138,16 @@ class ProductReleaseMeta(object):
 
         return None if None in (rv1, rv2) else (rv1, rv2)
 
-    def get_compatible_versions(self, version, minor_versioned=False, instance_name=None):
+    def get_compatible_versions(self, version, minor_versioned=False, instance_name=None, self_appended=True):
         """
-        Given a specific product version. If the instance_name is present,
-        more constraints on the instance would be considered.
+        Given a specific product version, return compatible products' version ranges.
+        If the instance_name is present, more constraints on the instance would be considered.
         Otherwise, the instance-specific constraints would be ignored.
 
         :param version: the product version.
         :param minor_versioned: if checking minor versions only.
         :param instance_name: the specified instance name.
+        :param self_appended: if appending input version into the result.
         :return: the compatible product version ranges, {product: [(minv, maxv)]}
         """
         version = parse_version(version)
@@ -188,9 +189,10 @@ class ProductReleaseMeta(object):
 
         # Differentiate derived and declared constraints
         derived_constraints = {}
-        declared_constraints = {
-            product: [(version, version)]  # We treat the input as declared constraint
-        }
+        declared_constraints = {}
+        if self_appended:
+            # We treat the input as declared constraint
+            declared_constraints[product] = [(version, version)]
 
         def add_constraint(store, product, vrange):
             if product not in store:

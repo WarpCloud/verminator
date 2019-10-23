@@ -15,17 +15,17 @@ __all__ = ['Instance', 'VersionedInstance', 'Release']
 
 
 class Instance(object):
-    def __init__(self, instance_type, instance_folder, omitsample=False):
+    def __init__(self, instance_type, instance_folder, omit_sample=False):
         self.instance_type = instance_type
         self.instance_folder = Path(instance_folder)
         self.versioned_instances = dict()  # {major_version_num: VersionedInstance}
 
-        if omitsample and instance_type.startswith('_'):
+        if omit_sample and instance_type.startswith('_'):
             # Omit instance with private symbol '_'
             return
 
         for ver in self.instance_folder.iterdir():
-            if omitsample and ver.name.startswith('_'):
+            if omit_sample and ver.name.startswith('_'):
                 # Omit instance version with private symbol '_'
                 continue
             image_file = ver.joinpath('images.yaml')
@@ -96,15 +96,17 @@ class Instance(object):
                 return True
         return False
 
-    def validate(self, release_meta):
+    def validate(self, release_meta, sync_releases=False):
+        """Validate all versioned instances and releases"""
         self._validate_declared_tdc_releases(release_meta)
+        # Validate specific versioned instance
         for ver, versioned_ins in self.versioned_instances.items():
             print(self.instance_folder.joinpath(ver))
-            # Validate specific versioned instance
-            versioned_ins.validate(release_meta)
+            versioned_ins.validate(release_meta, sync_releases)
 
     def _validate_declared_tdc_releases(self, release_meta):
-        """The declared TDC releases in release_meta.yaml should be also declared in images.yaml
+        """WARP-38519: The declared TDC releases in release_meta.yaml
+        should be also declared in images.yaml
         """
         tdc_releases = [i for i in release_meta.get_releases().keys() if i.prefix == VC.OEM_NAME]
 
@@ -254,6 +256,9 @@ class VersionedInstance(object):
                     image_name, self.instance_type, self.major_version)
         self._releases[r.release_version] = r
 
+    def remove_release(self, release_version):
+        return self._releases.pop(release_version)
+
     def get_release(self, release_version, default=None):
         """Get a release defined in the VersionedInstance
         """
@@ -296,6 +301,18 @@ class VersionedInstance(object):
                 print('Duplicated major version {} for {}, {}, skip'.format(
                     major_version, self.instance_type, self.major_version))
 
+    def convert_oem(self):
+        self._min_tdc_version = replace_product_name(self._min_tdc_version, VC.OEM_NAME, VC._OEM_ORIGIN)
+        self._max_tdc_version = replace_product_name(self._max_tdc_version, VC.OEM_NAME, VC._OEM_ORIGIN)
+        self._hot_fix_ranges = [
+            (
+                replace_product_name(minv, VC.OEM_NAME, by=VC._OEM_ORIGIN),
+                replace_product_name(maxv, VC.OEM_NAME, by=VC._OEM_ORIGIN)
+            ) for minv, maxv in self._hot_fix_ranges
+        ]
+        for rver, release in self._releases.items():
+            self._releases[rver] = release.convert_oem(VC.OEM_NAME, VC._OEM_ORIGIN)
+
     def find_latest_release(self, product=None, is_final=False):
         """Find the latest release by product name .
         """
@@ -317,11 +334,14 @@ class VersionedInstance(object):
 
         return latest_release
 
-    def validate(self, release_meta):
-        """Validate properties and fix errors if possible
-        """
+    def validate(self, release_meta, sync_releases=True):
+        """Validate properties and fix errors if possible for versioned instance"""
+        # Remove deprecated versions, WARP-38528
+        if sync_releases:
+            self._remove_deprecated_releases(release_meta)
+
         # Update tdc min-max versions
-        self.update_tdc_minmax_version(release_meta)
+        self._update_tdc_minmax_version(release_meta)
 
         # Validate each release
         for ver, release in self._releases.items():
@@ -333,7 +353,23 @@ class VersionedInstance(object):
         self._validate_releases(release_meta)
         self._validate_argodb_images(release_meta)
 
-    def update_tdc_minmax_version(self, release_meta):
+    def _remove_deprecated_releases(self, release_meta):
+        """WARP-38528: Sync instance releases with meta info while removing undeclared old releases"""
+        for release in self.ordered_releases:
+            compilable_versions = release_meta.get_compatible_versions(release.release_version, self_appended=False)
+            product = release.release_version.prefix
+            found = False
+            for vrange in compilable_versions.get(product, list()):
+                if release.release_version.in_range(vrange[0], vrange[1]):
+                    found = True
+                    break
+            if product is not None and not found:
+                print('Warning: remove undeclared release {} of instance {}, {} (WARP-38528)'.format(
+                    release.release_version, self.instance_type, self.major_version
+                ))
+                self.remove_release(release.release_version)
+
+    def _update_tdc_minmax_version(self, release_meta):
         global_range = release_meta.get_tdc_version_range()
         tdc_vranges = list()
         for release in self.ordered_releases:
@@ -365,13 +401,22 @@ class VersionedInstance(object):
             )
 
     def _validate_hot_fix_ranges(self):
-        """Validate release versions and hot-fix ranges.
-        Fix errors if possible
-        """
+        """Validae hot-fix ranges for versioned instance"""
+
+        def is_version_in_hot_fix_range(version):
+            found = False
+            for _min, _max in self._hot_fix_ranges:
+                if version.in_range(_min, _max):
+                    found = True
+                    break
+            assert found is True, \
+                'Release version %s of "%s" should be located in a specific hot-fix range' % \
+                (version, self.instance_type)
+
         for release in self._releases.values():
             v = release.release_version
             try:
-                self._is_version_in_hot_fix_range(v)
+                is_version_in_hot_fix_range(v)
             except AssertionError as e:
                 print('Warning {}'.format(str(e)))
                 self.add_hot_fix_range(v, v)
@@ -391,28 +436,17 @@ class VersionedInstance(object):
         self._hot_fix_ranges = concatenate_vranges(complete_ranges) + \
                                concatenate_vranges(major_versions)
 
-    def _is_version_in_hot_fix_range(self, version):
-        found = False
-        for _min, _max in self._hot_fix_ranges:
-            if version.in_range(_min, _max):
-                found = True
-                break
-        assert found is True, \
-            'Release version %s of "%s" should be located in a specific hot-fix range' % \
-            (version, self.instance_type)
-
     def _validate_tdc_not_dependent_on_other_product_lines(self):
         for release in self._releases.values():
             product = product_name(release.release_version)
             if product == VC.OEM_NAME:
                 for dep, (minv, maxv) in release.dependencies.items():
                     if product_name(minv) != product:
-                        print('Warning: TDC should be independent product, instance "{}", {}, dep "{}"'
+                        print('Warning: TDC should better be independent: {}, {} depends on {}'
                               .format(release.instance_type, release.release_version, dep))
 
     def _validate_releases(self, release_meta):
-        """Validate all releases of the instance.
-        """
+        """Validate all releases of the instance."""
         ## For debugging
         # if self.instance_type == 'sophon' and str(self.major_version) == '2.3':
         #     print(self.instance_type, self.major_version)
@@ -510,18 +544,6 @@ class VersionedInstance(object):
             res['releases'].append(robj)
 
         return ordered_yaml_dump(res, default_flow_style=False)
-
-    def convert_oem(self):
-        self._min_tdc_version = replace_product_name(self._min_tdc_version, VC.OEM_NAME, VC._OEM_ORIGIN)
-        self._max_tdc_version = replace_product_name(self._max_tdc_version, VC.OEM_NAME, VC._OEM_ORIGIN)
-        self._hot_fix_ranges = [
-            (
-                replace_product_name(minv, VC.OEM_NAME, by=VC._OEM_ORIGIN),
-                replace_product_name(maxv, VC.OEM_NAME, by=VC._OEM_ORIGIN)
-            ) for minv, maxv in self._hot_fix_ranges
-        ]
-        for rver, release in self._releases.items():
-            self._releases[rver] = release.convert_oem(VC.OEM_NAME, VC._OEM_ORIGIN)
 
 
 class Release(object):

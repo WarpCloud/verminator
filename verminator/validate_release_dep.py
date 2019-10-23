@@ -100,7 +100,7 @@ def scan_instances(root_dir, omitsample=False):
     rp = Path(root_dir)
     for instance in rp.iterdir():
         if not instance.is_dir() or \
-            (omitsample and instance.name.startswith('_')):
+                (omitsample and instance.name.startswith('_')):
             continue
         instance = instance.name
         inspath = Path(rp.joinpath(instance))
@@ -122,7 +122,6 @@ def validate_versioned_image(images, instance_name, instance_version):
     """
     Validate the meta info of images defined for each instance
     """
-    print('Validating versioned {}, {}'.format(instance_name, instance_version))
     assert images['instance-type'].lower() == instance_name.lower()
     assert images['major-version'] == instance_version
     assert 'images' in images
@@ -143,15 +142,15 @@ def validate_versioned_image(images, instance_name, instance_version):
         for fix_range in hot_fixes:
             if FlexVersion.in_range(rv, minv=fix_range['min'], maxv=fix_range['max']):
                 found = True
-        assert found, 'Release version {} of {} not in a valid hot-fix range' \
-            .format(rv, instance_name)
+        assert found, 'Release version {} of {} {} not in a valid hot-fix range' \
+            .format(rv, instance_name, instance_version)
 
     # Validate dependence min-max range: min <= max
     for release_info in releases.values():
         for dep in release_info.dependencies:
             res = FlexVersion.compares(dep.min_version, dep.max_version)
-            assert res <= 0, 'Invalid min-max range [min: {}, max: {}] for version {} of {}' \
-                .format(dep.min_version, dep.max_version, release_info.release_version, instance_name)
+            assert res <= 0, 'Invalid min-max range [min: {}, max: {}] for version {} of {} {}' \
+                .format(dep.min_version, dep.max_version, release_info.release_version, instance_name, instance_version)
 
 
 def _find_a_ranged_version(instance_name, minv, maxv):
@@ -179,8 +178,6 @@ def validate_dependence_versions():
     # version as in defined range
     for instance_name, versions in all_instance_releases.items():
         for instance_version, release_info in versions.items():
-            print('Validating dependence of {} version {}'.format(
-                release_info.instance_name, instance_version))
             dependencies = release_info.dependencies
             for dep in dependencies:
                 dep_type = dep.type
