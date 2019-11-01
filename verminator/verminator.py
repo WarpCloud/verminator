@@ -503,8 +503,10 @@ class VersionedInstance(object):
                 if release_ver.prefix != 'argodb':
                     continue
                 tdc_vrange = release_meta.get_tdc_version_range(release_ver, self.instance_type)
-                release.image_version['terminal_image'] = tdc_vrange[1]
-                print('WARNING: set terminal image for argodb {} as {} (WARP-38405)'.format(release_ver, tdc_vrange[1]))
+                terminal_image_ver = tdc_vrange[1] if tdc_vrange is not None else None
+                release.image_version['terminal_image'] = terminal_image_ver
+                print('WARNING: set terminal image for argodb {} as {} (WARP-38405)'
+                      .format(release_ver, terminal_image_ver))
 
     def to_yaml(self):
         # Ordered keys
