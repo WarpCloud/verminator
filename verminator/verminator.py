@@ -159,8 +159,9 @@ class VersionedInstance(object):
                              (self.instance_type, self.major_version))
 
         self._hot_fix_ranges = list()  # [(minv, maxv)]
-        for item in kwargs.get('hot-fix-ranges', list):
-            self.add_hot_fix_range(item.get('min'), item.get('max'))
+        ## Update hot fix ranges according to existing releases
+        # for item in kwargs.get('hot-fix-ranges', list):
+        #     self.add_hot_fix_range(item.get('min'), item.get('max'))
 
         self._images = dict()  # {var: { name:name, role: role, roles: []}}
         for item in kwargs.get('images', dict()):
