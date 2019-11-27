@@ -49,7 +49,7 @@ class VerminatorCmd(object):
         parser = self._subcmd_parser('Validate existing image versions and fix errors automatically')
         parser.add_argument('--sync-releases', default=True, type=bool,
                             help='Force to remove undeclared releases in meta yaml')
-        parser.add_argument('--enable-terminal-constraint', default=False, type=bool,
+        parser.add_argument('--enable-terminal-constraint', default=True, type=bool,
                             help='WARP-38405: Pre TDC-2.1, Set terminal of ArgoDB/KunDB product line with ' +
                                  'latest TDC version; With TDC-2.2+, enable instance constraint rule for terminal')
         args = parser.parse_args(sys.argv[2:])

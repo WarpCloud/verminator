@@ -12,6 +12,7 @@
 # ************************
 from .config import verminator_config as VC
 from .utils import *
+import copy
 
 __all__ = ['ProductReleaseMeta']
 
@@ -155,15 +156,16 @@ class ProductReleaseMeta(object):
 
         # Check that the version is complete or in major form
         _is_major_version = is_major_version(version)
-        instance_releases = dict()
-        default_releases = dict()
 
-        # Prepare instance-specific and default release meta info.
+        # All declared releases in meta
+        default_releases = dict()
         if not _is_major_version or minor_versioned:
             default_releases = self.get_releases()
         else:
             default_releases = self.get_major_versioned_releases()
 
+        # Declared instance releases
+        instance_releases = dict()
         if instance_name is not None:
             if not _is_major_version or minor_versioned:
                 instance_releases = self.get_releases(instance_name=instance_name)
@@ -171,7 +173,7 @@ class ProductReleaseMeta(object):
                 instance_releases = self.get_major_versioned_releases(instance_name=instance_name)
 
         # Unify instance-specific and default release meta info, if present
-        releases = default_releases
+        releases = copy.deepcopy(default_releases)
         for r, product_versions in instance_releases.items():
             if r not in releases:
                 releases[r] = product_versions
