@@ -47,11 +47,10 @@ class VerminatorCmd(object):
 
     def validate(self):
         parser = self._subcmd_parser('Validate existing image versions and fix errors automatically')
-        parser.add_argument('--sync-releases', default=True, type=bool,
-                            help='Force to remove undeclared releases in meta yaml')
-        parser.add_argument('--enable-terminal-constraint', default=True, type=bool,
-                            help='WARP-38405: Pre TDC-2.1, Set terminal of ArgoDB/KunDB product line with ' +
-                                 'latest TDC version; With TDC-2.2+, enable instance constraint rule for terminal')
+        parser.add_argument('--no-sync-releases', action='store_true',
+                            help='Disable feature of removing undeclared releases in meta yaml forcedly')
+        parser.add_argument('--no-terminal-constraint', action='store_true',
+                            help='Enable instance constraint rule for terminal (WARP-38405), TDC-2.2+')
         args = parser.parse_args(sys.argv[2:])
         print('Running validation, instance_folder=%s, release_meta=%s ...' % \
               (args.instance_folder, args.release_meta))
@@ -62,8 +61,8 @@ class VerminatorCmd(object):
             dump=not args.no_dump,
             oem=args.oem,
             omit_sample=args.omit_sample,
-            sync_releases=args.sync_releases,
-            enable_terminal_constraint=args.enable_terminal_constraint,
+            sync_releases=not args.no_sync_releases,
+            enable_terminal_constraint=not args.no_terminal_constraint,
         )
 
     def _validate_instances(self, instance_folder, release_meta=None, component=None, dump=True,

@@ -352,7 +352,7 @@ class VersionedInstance(object):
         self._validate_hot_fix_ranges()
         # self._validate_tdc_not_dependent_on_other_product_lines()  # Disable it for now
         self._validate_releases(release_meta)
-        self._validate_argodb_images(release_meta, enable_terminal_constraint)
+        self._validate_terminal_images(release_meta, enable_terminal_constraint)
 
     def _remove_deprecated_releases(self, release_meta):
         """WARP-38528: Sync instance releases with meta info while removing undeclared old releases"""
@@ -490,23 +490,44 @@ class VersionedInstance(object):
                           .format(vrange[1], maxv, instance, r.instance_type, r.release_version))
                 r.dependencies[instance] = (minv, maxv)
 
-    def _validate_argodb_images(self, release_meta, enable_terminal_constraint=False):
+    def _validate_terminal_images(self, release_meta, enable_terminal_constraint=False):
         """
-        Fix custom terminal image version for argodb, WARP-38405
+        Fix custom terminal image version for argodb and kundb, WARP-38405
         """
         if self.instance_type == 'terminal':
-            for release_ver, release in self._releases.items():
-                if release_ver.prefix != 'argodb':
-                    continue
+            # Terminal releases with constraints from plain release meta:
+            # {version: {product: (vmin, vmax)}}
+            release_constraints = release_meta.get_releases(self.instance_type)
+            sorted_versions = sorted(
+                release_constraints.keys(),
+                key=cmp_to_key(lambda x, y: FlexVersion.compares(x, y)),
+                reverse=True
+            )
+
+            # Iterate over all declared image releases in images.yaml
+            for version, release in self._releases.items():
                 terminal_image_ver = None
                 if enable_terminal_constraint:
-                    pass
+                    # For TDC-2.2+, traverse all terminal constraint version
+                    for v in sorted_versions:
+                        for product, vrange in release_constraints[v].items():
+                            if version.in_range(vrange[0], vrange[1]):
+                                # We found declared terminal image mapping for other product lines
+                                terminal_image_ver = v
+                                break
                 else:
-                    tdc_vrange = release_meta.get_tdc_version_range(release_ver, self.instance_type)
-                    terminal_image_ver = tdc_vrange[1] if tdc_vrange is not None else None
-                    release.image_version['terminal_image'] = terminal_image_ver
-                print('WARNING: set terminal image for ArgoDB {} as {} (WARP-38405)'
-                      .format(release_ver, terminal_image_ver))
+                    # For pre TDC-2.1, set the terminal of ArgoDB as latest TDC version
+                    if version.prefix == 'argodb':
+                        tdc_vrange = release_meta.get_tdc_version_range(version, self.instance_type)
+                        terminal_image_ver = tdc_vrange[1] if tdc_vrange is not None else None
+
+                if terminal_image_ver is None:
+                    # Remain user defined versions
+                    terminal_image_ver = version
+                else:
+                    print('WARNING: set terminal image of {} as {} (WARP-38405)'.format(version, terminal_image_ver))
+
+                release.image_version['terminal_image'] = terminal_image_ver
 
     def to_yaml(self):
         # Ordered keys

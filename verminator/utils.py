@@ -186,3 +186,12 @@ def _concatenate_vranges_with_same_prefix(vranges, hard_merging=False):
             res[-1] = (pmin, cmax)
 
     return res
+
+
+def check_version_in_vranges_list(version, vranges):
+    found = False
+    for vrange in vranges:
+        if version.in_range(vrange[0], vrange[1]):
+            found = True
+            break
+    return found
