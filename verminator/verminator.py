@@ -96,13 +96,13 @@ class Instance(object):
                 return True
         return False
 
-    def validate(self, release_meta, sync_releases=False):
+    def validate_instance(self, release_meta, sync_releases=False, enable_terminal_constraint=False):
         """Validate all versioned instances and releases"""
         self._validate_declared_tdc_releases(release_meta)
         # Validate specific versioned instance
         for ver, versioned_ins in self.versioned_instances.items():
             print(self.instance_folder.joinpath(ver))
-            versioned_ins.validate(release_meta, sync_releases)
+            versioned_ins.validate_versioned_instance(release_meta, sync_releases, enable_terminal_constraint)
 
     def _validate_declared_tdc_releases(self, release_meta):
         """WARP-38519: The declared TDC releases in release_meta.yaml
@@ -335,7 +335,7 @@ class VersionedInstance(object):
 
         return latest_release
 
-    def validate(self, release_meta, sync_releases=True):
+    def validate_versioned_instance(self, release_meta, sync_releases=True, enable_terminal_constraint=False):
         """Validate properties and fix errors if possible for versioned instance"""
         # Remove deprecated versions, WARP-38528
         if sync_releases:
@@ -352,7 +352,7 @@ class VersionedInstance(object):
         self._validate_hot_fix_ranges()
         # self._validate_tdc_not_dependent_on_other_product_lines()  # Disable it for now
         self._validate_releases(release_meta)
-        self._validate_argodb_images(release_meta)
+        self._validate_argodb_images(release_meta, enable_terminal_constraint)
 
     def _remove_deprecated_releases(self, release_meta):
         """WARP-38528: Sync instance releases with meta info while removing undeclared old releases"""
@@ -410,16 +410,11 @@ class VersionedInstance(object):
                 if version.in_range(_min, _max):
                     found = True
                     break
-            assert found is True, \
-                'Release version %s of "%s" should be located in a specific hot-fix range' % \
-                (version, self.instance_type)
+            return found
 
         for release in self._releases.values():
             v = release.release_version
-            try:
-                is_version_in_hot_fix_range(v)
-            except AssertionError as e:
-                print('Warning {}'.format(str(e)))
+            if not is_version_in_hot_fix_range(v):
                 self.add_hot_fix_range(v, v)
 
         # Merge continuous hot-fix ranges
@@ -495,7 +490,7 @@ class VersionedInstance(object):
                           .format(vrange[1], maxv, instance, r.instance_type, r.release_version))
                 r.dependencies[instance] = (minv, maxv)
 
-    def _validate_argodb_images(self, release_meta):
+    def _validate_argodb_images(self, release_meta, enable_terminal_constraint=False):
         """
         Fix custom terminal image version for argodb, WARP-38405
         """
@@ -503,9 +498,13 @@ class VersionedInstance(object):
             for release_ver, release in self._releases.items():
                 if release_ver.prefix != 'argodb':
                     continue
-                tdc_vrange = release_meta.get_tdc_version_range(release_ver, self.instance_type)
-                terminal_image_ver = tdc_vrange[1] if tdc_vrange is not None else None
-                release.image_version['terminal_image'] = terminal_image_ver
+                terminal_image_ver = None
+                if enable_terminal_constraint:
+                    pass
+                else:
+                    tdc_vrange = release_meta.get_tdc_version_range(release_ver, self.instance_type)
+                    terminal_image_ver = tdc_vrange[1] if tdc_vrange is not None else None
+                    release.image_version['terminal_image'] = terminal_image_ver
                 print('WARNING: set terminal image for argodb {} as {} (WARP-38405)'
                       .format(release_ver, terminal_image_ver))
 

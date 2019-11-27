@@ -49,6 +49,9 @@ class VerminatorCmd(object):
         parser = self._subcmd_parser('Validate existing image versions and fix errors automatically')
         parser.add_argument('--sync-releases', default=True, type=bool,
                             help='Force to remove undeclared releases in meta yaml')
+        parser.add_argument('--enable-terminal-constraint', default=False, type=bool,
+                            help='WARP-38405: Pre TDC-2.1, Set terminal of ArgoDB/KunDB product line with ' +
+                                 'latest TDC version; With TDC-2.2+, enable instance constraint rule for terminal')
         args = parser.parse_args(sys.argv[2:])
         print('Running validation, instance_folder=%s, release_meta=%s ...' % \
               (args.instance_folder, args.release_meta))
@@ -59,11 +62,13 @@ class VerminatorCmd(object):
             dump=not args.no_dump,
             oem=args.oem,
             omit_sample=args.omit_sample,
-            sync_releases=args.sync_releases
+            sync_releases=args.sync_releases,
+            enable_terminal_constraint=args.enable_terminal_constraint,
         )
 
     def _validate_instances(self, instance_folder, release_meta=None, component=None, dump=True,
-                            oem=None, omit_sample=False, sync_releases=True):
+                            oem=None, omit_sample=False, sync_releases=True,
+                            enable_terminal_constraint=False):
         verminator_config.set_oem(oem)
         p = Path(instance_folder)
         assert p.is_dir(), 'Path {} not found or existed'.format(instance_folder)
@@ -84,7 +89,7 @@ class VerminatorCmd(object):
                     component_found = True
             # New instance and validation
             instance = Instance(instance_path.name, instance_path, omit_sample)
-            instance.validate(meta, sync_releases=sync_releases)
+            instance.validate_instance(meta, sync_releases, enable_terminal_constraint)
             if dump:
                 instance.dump()
 
